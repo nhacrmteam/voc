@@ -24,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <Link href="/dashboard">📊 ภาพรวม</Link>
                 <Link href="/channels">📥 8 ช่องทาง</Link>
                 <Link href="/voc">💬 รายการ VOC</Link>
+                <Link href="/analyze">🤖 AI วิเคราะห์</Link>
                 <Link href="/prioritize">🎯 จัดลำดับ</Link>
               </nav>
             </aside>
