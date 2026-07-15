@@ -1,5 +1,6 @@
 'use client';
 // AuthGate — ล็อกอิน / สมัครใช้งาน / ลืมรหัสผ่าน / ตั้งรหัสใหม่ (Supabase Auth)
+// ดีไซน์หน้าเข้าใช้งาน 2 คอลัมน์ + โลโก้การเคหะแห่งชาติ (SVG)
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
@@ -10,10 +11,21 @@ const ROLES = [
 ];
 const ROLE_TH: Record<string, string> = { admin: 'แอดมิน', operator: 'ผู้ปฏิบัติงาน', executive: 'ผู้บริหาร' };
 
-const inp: React.CSSProperties = { width: '100%', padding: '9px 11px', border: '1px solid #e2e8f0', borderRadius: 9, margin: '4px 0 11px', fontSize: 14, fontFamily: 'inherit' };
-const lab: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#475569' };
-const btn: React.CSSProperties = { width: '100%', padding: 11, background: '#2e6cf0', color: '#fff', border: 'none', borderRadius: 9, fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' };
-const linkBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#2e6cf0', cursor: 'pointer', fontSize: 12.5, fontFamily: 'inherit', padding: 0 };
+const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1px solid #dfe6f0', borderRadius: 9, margin: '4px 0 12px', fontSize: 14, fontFamily: 'inherit', outlineColor: '#2e6cf0' };
+const lab: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#334155' };
+const btn: React.CSSProperties = { width: '100%', padding: 12, background: '#1f3a93', color: '#fff', border: 'none', borderRadius: 9, fontWeight: 700, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' };
+const linkBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#2e6cf0', cursor: 'pointer', fontSize: 12.5, fontFamily: 'inherit', padding: 0, fontWeight: 600 };
+
+function Logo({ size = 60, color = '#4a9fe8' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" aria-label="โลโก้การเคหะแห่งชาติ">
+      <rect x="9" y="9" width="82" height="82" rx="5" stroke={color} strokeWidth="7" />
+      <path d="M27 24 H43 L37 76 H27 Z" fill={color} />
+      <path d="M73 24 H57 L63 76 H73 Z" fill={color} />
+      <rect x="44" y="52" width="12" height="24" fill={color} />
+    </svg>
+  );
+}
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -24,7 +36,6 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // ฟอร์ม
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [f, setF] = useState({ full_name: '', emp_code: '', phone: '', dept: '', position: '', role: 'operator' });
@@ -50,7 +61,6 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     const { data } = await supabase.from('profiles').select('role, full_name').eq('id', uid).single();
     setProfile({ role: data?.role || 'operator', full_name: data?.full_name || null });
   }
-
   async function doLogin(e: React.FormEvent) {
     e.preventDefault(); setErr(''); setMsg(''); setBusy(true);
     const { error } = await supabase!.auth.signInWithPassword({ email, password: pw });
@@ -65,8 +75,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     });
     setBusy(false);
     if (error) { setErr('สมัครไม่สำเร็จ: ' + error.message); return; }
-    if (data.session) { setMsg(''); } // ถ้าปิดยืนยันอีเมล = ล็อกอินเลย
-    else { setMode('login'); setMsg('สมัครสำเร็จ! กรุณายืนยันอีเมล (ตรวจกล่องอีเมล) แล้วเข้าสู่ระบบ'); }
+    if (!data.session) { setMode('login'); setMsg('สมัครสำเร็จ! กรุณายืนยันอีเมล (ตรวจกล่องอีเมล) แล้วเข้าสู่ระบบ'); }
   }
   async function doForgot(e: React.FormEvent) {
     e.preventDefault(); setErr(''); setMsg(''); setBusy(true);
@@ -86,87 +95,110 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
 
   if (!ready) return <div style={{ padding: 40, fontFamily: 'Sarabun,sans-serif' }}>กำลังโหลด…</div>;
 
-  // ---------- หน้า Auth (ยังไม่ล็อกอิน) ----------
   if (supabase && (!session || mode === 'recovery')) {
+    const titleMap: Record<string, string> = { login: 'เข้าสู่ระบบ', signup: 'สมัครใช้งานระบบ', forgot: 'ลืมรหัสผ่าน', recovery: 'ตั้งรหัสผ่านใหม่' };
     return (
       <div style={{ position: 'fixed', inset: 0, display: 'grid', placeItems: 'center', overflow: 'auto',
-        background: 'linear-gradient(135deg,#16285f,#1f3a93 55%,#2e6cf0)', fontFamily: 'Sarabun,sans-serif', padding: 20 }}>
-        <div style={{ background: '#fff', borderRadius: 16, padding: 30, width: '100%', maxWidth: mode === 'signup' ? 460 : 380, boxShadow: '0 24px 60px rgba(0,0,0,.35)', margin: '20px 0' }}>
-          <div style={{ fontWeight: 700, fontSize: 20, color: '#1f3a93' }}>กคช · VOC</div>
-          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
-            {mode === 'login' && 'เข้าสู่ระบบเสียงของลูกค้า'}
-            {mode === 'signup' && 'สมัครใช้งานระบบ (พนักงาน กคช.)'}
-            {mode === 'forgot' && 'ลืมรหัสผ่าน — รับลิงก์ตั้งรหัสใหม่ทางอีเมล'}
-            {mode === 'recovery' && 'ตั้งรหัสผ่านใหม่'}
+        background: 'linear-gradient(135deg,#0f1e46,#16285f 45%,#1f3a93)', fontFamily: 'Sarabun,sans-serif', padding: 20 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', width: '100%', maxWidth: 940, background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 30px 80px rgba(0,0,0,.4)', margin: '24px 0' }}>
+
+          {/* ซ้าย: แผงแบรนด์ */}
+          <div style={{ flex: '1 1 340px', minWidth: 300, background: 'linear-gradient(160deg,#1f3a93,#16285f)', color: '#fff', padding: '40px 36px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ background: '#fff', borderRadius: 14, padding: 8, display: 'grid', placeItems: 'center' }}><Logo size={52} color="#4a9fe8" /></div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 18, lineHeight: 1.2 }}>การเคหะแห่งชาติ</div>
+                <div style={{ fontSize: 12, opacity: .8, letterSpacing: .3 }}>National Housing Authority</div>
+              </div>
+            </div>
+            <div style={{ height: 1, background: 'rgba(255,255,255,.18)', margin: '26px 0 22px' }} />
+            <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.35 }}>VOC Web Application<br />รวบรวมเสียงของลูกค้า</div>
+            <div style={{ fontSize: 13, opacity: .85, marginTop: 12, lineHeight: 1.7 }}>
+              การเคหะแห่งชาติ · ระบบ Voice of Customer ปี 2569<br />
+              รวบรวม วิเคราะห์ และรายงานเสียงลูกค้าจาก 8 ช่องทาง
+            </div>
+            <div style={{ marginTop: 'auto', paddingTop: 26, fontSize: 12.5, opacity: .9, lineHeight: 2 }}>
+              🔐 เข้าใช้งานตามบทบาท (Role-Based Access)<br />
+              👤 แอดมิน · พนักงาน · ผู้บริหาร
+            </div>
           </div>
-          {err && <div style={{ background: '#fee2e2', color: '#b91c1c', fontSize: 12.5, padding: '8px 11px', borderRadius: 8, marginBottom: 12 }}>{err}</div>}
-          {msg && <div style={{ background: '#dcfce7', color: '#15803d', fontSize: 12.5, padding: '8px 11px', borderRadius: 8, marginBottom: 12 }}>{msg}</div>}
 
-          {/* LOGIN */}
-          {mode === 'login' && (
-            <form onSubmit={doLogin}>
-              <label style={lab}>อีเมล</label>
-              <input style={inp} value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="you@nha.co.th" />
-              <label style={lab}>รหัสผ่าน</label>
-              <input style={inp} value={pw} onChange={e => setPw(e.target.value)} type="password" required placeholder="••••••••" />
-              <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ'}</button>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14 }}>
-                <button type="button" style={linkBtn} onClick={() => { setMode('forgot'); setErr(''); setMsg(''); }}>ลืมรหัสผ่าน?</button>
-                <button type="button" style={linkBtn} onClick={() => { setMode('signup'); setErr(''); setMsg(''); }}>สมัครใช้งาน</button>
-              </div>
-            </form>
-          )}
+          {/* ขวา: ฟอร์ม */}
+          <div style={{ flex: '1 1 380px', minWidth: 300, padding: '38px 36px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <Logo size={30} color="#2e6cf0" />
+              <div style={{ fontWeight: 700, fontSize: 19, color: '#0f172a' }}>{titleMap[mode]}</div>
+            </div>
+            <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 18 }}>
+              {mode === 'login' && 'เข้าสู่ระบบเสียงของลูกค้า การเคหะแห่งชาติ'}
+              {mode === 'signup' && 'กรอกข้อมูลพนักงานเพื่อขอเข้าใช้งาน'}
+              {mode === 'forgot' && 'รับลิงก์ตั้งรหัสผ่านใหม่ทางอีเมล'}
+              {mode === 'recovery' && 'กำหนดรหัสผ่านใหม่ของคุณ'}
+            </div>
+            {err && <div style={{ background: '#fee2e2', color: '#b91c1c', fontSize: 12.5, padding: '9px 12px', borderRadius: 8, marginBottom: 13 }}>{err}</div>}
+            {msg && <div style={{ background: '#dcfce7', color: '#15803d', fontSize: 12.5, padding: '9px 12px', borderRadius: 8, marginBottom: 13 }}>{msg}</div>}
 
-          {/* SIGNUP */}
-          {mode === 'signup' && (
-            <form onSubmit={doSignup}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div><label style={lab}>ชื่อ-สกุล *</label><input style={inp} value={f.full_name} onChange={set('full_name')} required /></div>
-                <div><label style={lab}>รหัสพนักงาน *</label><input style={inp} value={f.emp_code} onChange={set('emp_code')} required /></div>
-                <div><label style={lab}>เบอร์โทร</label><input style={inp} value={f.phone} onChange={set('phone')} /></div>
-                <div><label style={lab}>หน่วยงาน/ฝ่าย</label><input style={inp} value={f.dept} onChange={set('dept')} /></div>
-                <div><label style={lab}>ตำแหน่ง</label><input style={inp} value={f.position} onChange={set('position')} /></div>
-                <div><label style={lab}>เข้าใช้ในฐานะ *</label>
-                  <select style={inp} value={f.role} onChange={set('role')}>{ROLES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}</select>
+            {mode === 'login' && (
+              <form onSubmit={doLogin}>
+                <label style={lab}>อีเมล</label>
+                <input style={inp} value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="you@nha.co.th" />
+                <label style={lab}>รหัสผ่าน</label>
+                <input style={inp} value={pw} onChange={e => setPw(e.target.value)} type="password" required placeholder="••••••••" />
+                <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ'}</button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 15 }}>
+                  <button type="button" style={linkBtn} onClick={() => { setMode('forgot'); setErr(''); setMsg(''); }}>ลืมรหัสผ่าน?</button>
+                  <button type="button" style={linkBtn} onClick={() => { setMode('signup'); setErr(''); setMsg(''); }}>สมัครใช้งาน →</button>
                 </div>
-              </div>
-              <label style={lab}>อีเมลพนักงาน *</label>
-              <input style={inp} value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="you@nha.co.th" />
-              <label style={lab}>รหัสผ่าน * (อย่างน้อย 6 ตัว)</label>
-              <input style={inp} value={pw} onChange={e => setPw(e.target.value)} type="password" required minLength={6} />
-              <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังสมัคร…' : 'สมัครใช้งาน'}</button>
-              <div style={{ marginTop: 12, textAlign: 'center' }}>
-                <button type="button" style={linkBtn} onClick={() => { setMode('login'); setErr(''); setMsg(''); }}>← กลับไปหน้าเข้าสู่ระบบ</button>
-              </div>
-            </form>
-          )}
+              </form>
+            )}
 
-          {/* FORGOT */}
-          {mode === 'forgot' && (
-            <form onSubmit={doForgot}>
-              <label style={lab}>อีเมลที่ลงทะเบียนไว้</label>
-              <input style={inp} value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="you@nha.co.th" />
-              <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังส่ง…' : 'ส่งลิงก์ตั้งรหัสใหม่'}</button>
-              <div style={{ marginTop: 12, textAlign: 'center' }}>
-                <button type="button" style={linkBtn} onClick={() => { setMode('login'); setErr(''); setMsg(''); }}>← กลับไปหน้าเข้าสู่ระบบ</button>
-              </div>
-            </form>
-          )}
+            {mode === 'signup' && (
+              <form onSubmit={doSignup}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+                  <div><label style={lab}>ชื่อ-สกุล *</label><input style={inp} value={f.full_name} onChange={set('full_name')} required /></div>
+                  <div><label style={lab}>รหัสพนักงาน *</label><input style={inp} value={f.emp_code} onChange={set('emp_code')} required /></div>
+                  <div><label style={lab}>เบอร์โทร</label><input style={inp} value={f.phone} onChange={set('phone')} /></div>
+                  <div><label style={lab}>หน่วยงาน/ฝ่าย</label><input style={inp} value={f.dept} onChange={set('dept')} /></div>
+                  <div><label style={lab}>ตำแหน่ง</label><input style={inp} value={f.position} onChange={set('position')} /></div>
+                  <div><label style={lab}>เข้าใช้ในฐานะ *</label>
+                    <select style={inp} value={f.role} onChange={set('role')}>{ROLES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}</select>
+                  </div>
+                </div>
+                <label style={lab}>อีเมลพนักงาน *</label>
+                <input style={inp} value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="you@nha.co.th" />
+                <label style={lab}>รหัสผ่าน * (อย่างน้อย 6 ตัว)</label>
+                <input style={inp} value={pw} onChange={e => setPw(e.target.value)} type="password" required minLength={6} />
+                <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังสมัคร…' : 'สมัครใช้งาน'}</button>
+                <div style={{ marginTop: 13, textAlign: 'center' }}>
+                  <button type="button" style={linkBtn} onClick={() => { setMode('login'); setErr(''); setMsg(''); }}>← กลับไปหน้าเข้าสู่ระบบ</button>
+                </div>
+              </form>
+            )}
 
-          {/* RECOVERY (ตั้งรหัสใหม่จากลิงก์ในอีเมล) */}
-          {mode === 'recovery' && (
-            <form onSubmit={doRecovery}>
-              <label style={lab}>รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)</label>
-              <input style={inp} value={pw} onChange={e => setPw(e.target.value)} type="password" required minLength={6} />
-              <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังบันทึก…' : 'บันทึกรหัสผ่านใหม่'}</button>
-            </form>
-          )}
+            {mode === 'forgot' && (
+              <form onSubmit={doForgot}>
+                <label style={lab}>อีเมลที่ลงทะเบียนไว้</label>
+                <input style={inp} value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="you@nha.co.th" />
+                <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังส่ง…' : 'ส่งลิงก์ตั้งรหัสใหม่'}</button>
+                <div style={{ marginTop: 13, textAlign: 'center' }}>
+                  <button type="button" style={linkBtn} onClick={() => { setMode('login'); setErr(''); setMsg(''); }}>← กลับไปหน้าเข้าสู่ระบบ</button>
+                </div>
+              </form>
+            )}
+
+            {mode === 'recovery' && (
+              <form onSubmit={doRecovery}>
+                <label style={lab}>รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)</label>
+                <input style={inp} value={pw} onChange={e => setPw(e.target.value)} type="password" required minLength={6} />
+                <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังบันทึก…' : 'บันทึกรหัสผ่านใหม่'}</button>
+              </form>
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
-  // ---------- ล็อกอินแล้ว → แสดงแอป + แถบผู้ใช้ ----------
   return (
     <>
       {session && (
