@@ -16,15 +16,11 @@ const lab: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#33415
 const btn: React.CSSProperties = { width: '100%', padding: 12, background: '#1f3a93', color: '#fff', border: 'none', borderRadius: 9, fontWeight: 700, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' };
 const linkBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#2e6cf0', cursor: 'pointer', fontSize: 12.5, fontFamily: 'inherit', padding: 0, fontWeight: 600 };
 
-function Logo({ size = 60, color = '#4a9fe8' }: { size?: number; color?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" aria-label="โลโก้การเคหะแห่งชาติ">
-      <rect x="9" y="9" width="82" height="82" rx="5" stroke={color} strokeWidth="7" />
-      <path d="M27 24 H43 L37 76 H27 Z" fill={color} />
-      <path d="M73 24 H57 L63 76 H73 Z" fill={color} />
-      <rect x="44" y="52" width="12" height="24" fill={color} />
-    </svg>
-  );
+const NHA_LOGO = 'https://upload.wikimedia.org/wikipedia/commons/0/0a/Emblem_of_the_National_Housing_Authority_of_Thailand.svg';
+function Logo({ size = 60 }: { size?: number }) {
+  // โลโก้จริงของการเคหะแห่งชาติ (จาก Wikimedia Commons)
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={NHA_LOGO} alt="โลโก้การเคหะแห่งชาติ" width={size} height={size} style={{ display: 'block', objectFit: 'contain' }} />;
 }
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
@@ -105,7 +101,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
           {/* ซ้าย: แผงแบรนด์ */}
           <div style={{ flex: '1 1 340px', minWidth: 300, background: 'linear-gradient(160deg,#1f3a93,#16285f)', color: '#fff', padding: '40px 36px', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ background: '#fff', borderRadius: 14, padding: 8, display: 'grid', placeItems: 'center' }}><Logo size={52} color="#4a9fe8" /></div>
+              <div style={{ background: '#fff', borderRadius: 14, padding: 8, display: 'grid', placeItems: 'center' }}><Logo size={52} /></div>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 18, lineHeight: 1.2 }}>การเคหะแห่งชาติ</div>
                 <div style={{ fontSize: 12, opacity: .8, letterSpacing: .3 }}>National Housing Authority</div>
@@ -126,7 +122,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
           {/* ขวา: ฟอร์ม */}
           <div style={{ flex: '1 1 380px', minWidth: 300, padding: '38px 36px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-              <Logo size={30} color="#2e6cf0" />
+              <Logo size={30} />
               <div style={{ fontWeight: 700, fontSize: 19, color: '#0f172a' }}>{titleMap[mode]}</div>
             </div>
             <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 18 }}>
