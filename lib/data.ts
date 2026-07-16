@@ -1,5 +1,6 @@
 // lib/data.ts — ชั้นข้อมูล: ใช้ Supabase ถ้าตั้งค่า ENV แล้ว, ไม่งั้น fallback เป็น mock
 import { supabase, hasSupabase } from './supabaseClient';
+import { aiSentiment } from './ai';
 
 export type Sentiment = 'Positive' | 'Neutral' | 'Negative';
 export type Priority = 'High' | 'Medium' | 'Low';
@@ -16,6 +17,7 @@ export interface Voc {
   owner: string; status: CaseStatus;
   occurredAt: string; importedAt: string; imported: boolean;
   catProduct: string; catSales: string;
+  sentConf: number; sentUncertain: boolean; sentManual: boolean; sentReason: string;
 }
 
 export const CHANNELS = [
@@ -68,6 +70,7 @@ const MOCK: Voc[] = Array.from({ length: 60 }, (_, i) => {
     occurredAt: `2026-06-${String(day).padStart(2, '0')}`,
     importedAt: imported ? '2026-06-26' : `2026-06-${String(day).padStart(2, '0')}`,
     imported, catProduct: v.cat, catSales: 'การให้ข้อมูลโครงการ',
+    ...(az => ({ sentConf: az.conf, sentUncertain: az.uncertain, sentManual: false, sentReason: az.reason }))(aiSentiment(v.voice)),
   };
 });
 
@@ -86,6 +89,8 @@ function mapRow(r: any): Voc {
     owner: r.owner_dept ?? '', status: (r.status ?? 'รับเรื่อง') as CaseStatus,
     occurredAt: r.occurred_at ?? '', importedAt: r.imported_at ?? r.occurred_at ?? '',
     imported: !!r.is_imported, catProduct: a.cat_product ?? '', catSales: a.cat_sales ?? '',
+    sentConf: a.sentiment_confidence ?? 0, sentUncertain: (a.sentiment_confidence ?? 100) <= 50 && !a.sentiment_manual,
+    sentManual: !!a.sentiment_manual, sentReason: a.sentiment_reason ?? '',
   };
 }
 
