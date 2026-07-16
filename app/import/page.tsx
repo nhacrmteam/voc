@@ -86,10 +86,32 @@ export default function ImportPage() {
     setMsg(''); setErr(''); setRows([]);
     const f = e.target.files?.[0]; if (!f) return;
     setFileName(f.name);
-    if (!/\.(csv|txt)$/i.test(f.name)) { setErr('รองรับไฟล์ .csv — ถ้าเป็น Excel ให้ Save As เป็น CSV UTF-8 ก่อน'); return; }
+    const isXlsx = /\.(xlsx|xls)$/i.test(f.name);
+    if (!isXlsx && !/\.(csv|txt)$/i.test(f.name)) { setErr('รองรับไฟล์ .csv และ .xlsx เท่านั้น'); return; }
+    if (isXlsx) {
+      // อ่าน Excel ด้วย SheetJS (แผ่นแรก) — วันที่ Excel แปลงเป็น YYYY-MM-DD ให้อัตโนมัติ
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const XLSX = await import('xlsx');
+          const wb = XLSX.read(reader.result, { type: 'array', cellDates: true });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const grid: string[][] = (XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' }) as any[][])
+            .map(r => (r || []).map(c => String(c ?? '').trim()))
+            .filter(r => r.some(c => c !== ''));
+          handleGrid(grid);
+        } catch (ex: any) { setErr('อ่านไฟล์ Excel ไม่สำเร็จ: ' + (ex.message || String(ex))); }
+      };
+      reader.readAsArrayBuffer(f);
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = () => {
-      const grid = parseCSV(String(reader.result || ''));
+    reader.onload = () => handleGrid(parseCSV(String(reader.result || '')));
+    reader.readAsText(f, 'utf-8');
+  }
+
+  function handleGrid(grid: string[][]) {
+    {
       if (grid.length < 2) { setErr('ไฟล์ว่างหรือไม่มีข้อมูล (ต้องมีหัวตาราง + อย่างน้อย 1 แถว)'); return; }
       const head = grid[0].map(h => h.trim());
       const ix = (name: string) => head.findIndex(h => h.includes(name));
@@ -108,8 +130,7 @@ export default function ImportPage() {
         return { occurred, topic: iTopic >= 0 ? (r[iTopic] || '').trim() : '', text, source: iSrc >= 0 ? (r[iSrc] || '').trim() : '', product, journey, err: e };
       });
       setRows(out);
-    };
-    reader.readAsText(f, 'utf-8');
+    }
   }
 
   const ok = rows.filter(r => !r.err);
@@ -194,10 +215,10 @@ export default function ImportPage() {
 
         {/* ขั้น 2: อัปโหลด */}
         <div className="card">
-          <h3>2️⃣ อัปโหลดไฟล์ CSV</h3>
-          <input type="file" accept=".csv,.txt" onChange={onFile} style={{ marginTop: 8, fontSize: 13.5, fontFamily: 'inherit' }} />
+          <h3>2️⃣ อัปโหลดไฟล์ CSV หรือ Excel</h3>
+          <input type="file" accept=".csv,.txt,.xlsx,.xls" onChange={onFile} style={{ marginTop: 8, fontSize: 13.5, fontFamily: 'inherit' }} />
           {fileName && <span style={{ fontSize: 12.5, color: 'var(--muted)', marginLeft: 10 }}>{fileName}</span>}
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>* ไฟล์ Excel (.xlsx): เปิดใน Excel → Save As → CSV UTF-8 แล้วอัปโหลด</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>* รองรับ .csv และ .xlsx (อ่านแผ่นแรก) — หัวตารางตามเทมเพลต</div>
         </div>
 
         {/* ขั้น 3: พรีวิว + บันทึก */}
