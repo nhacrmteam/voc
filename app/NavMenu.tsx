@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-const ITEMS = [
+const ITEMS: { href: string; label: string; staffOnly?: boolean; adminOnly?: boolean }[] = [
   { href: '/dashboard', label: '📊 ภาพรวม' },
   { href: '/channels', label: '📥 8 ช่องทาง' },
   { href: '/voc', label: '💬 รายการ VOC' },
@@ -13,6 +13,7 @@ const ITEMS = [
   { href: '/analyze', label: '🤖 AI วิเคราะห์' },
   { href: '/prioritize', label: '🎯 จัดลำดับ' },
   { href: '/reports', label: '📄 รายงานข้อมูล' },
+  { href: '/admin', label: '⚙️ จัดการระบบ', adminOnly: true },
 ];
 
 export default function NavMenu() {
@@ -29,7 +30,11 @@ export default function NavMenu() {
 
   return (
     <nav className="nav">
-      {ITEMS.filter(it => !(it.staffOnly && role === 'executive')).map(it => (
+      {ITEMS.filter(it => {
+        if (it.staffOnly && role === 'executive') return false;
+        if (it.adminOnly && role !== 'admin' && role !== '') return false;  // '' = โหมดสาธิต แสดงทุกเมนู
+        return true;
+      }).map(it => (
         <Link key={it.href} href={it.href}>{it.label}</Link>
       ))}
       {role === 'executive' && (
