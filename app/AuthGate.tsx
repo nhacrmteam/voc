@@ -2,7 +2,11 @@
 // AuthGate — ล็อกอิน / สมัครใช้งาน / ลืมรหัสผ่าน / ตั้งรหัสใหม่ (Supabase Auth)
 // ดีไซน์หน้าเข้าใช้งาน 2 คอลัมน์ + โลโก้การเคหะแห่งชาติ (SVG)
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
+
+// หน้าที่เข้าได้โดยไม่ต้องล็อกอิน (ยืนยันอีเมล ฯลฯ)
+const PUBLIC_PATHS = ['/welcome'];
 
 const ROLES = [
   { v: 'admin', l: 'Admin (แอดมิน)' },
@@ -24,6 +28,7 @@ function Logo({ size = 60 }: { size?: number }) {
 }
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<{ role: string; full_name: string | null }>({ role: '', full_name: null });
@@ -67,7 +72,10 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     e.preventDefault(); setErr(''); setMsg(''); setBusy(true);
     const { data, error } = await supabase!.auth.signUp({
       email, password: pw,
-      options: { data: { full_name: f.full_name, emp_code: f.emp_code, phone: f.phone, dept: f.dept, position: f.position, role: f.role } },
+      options: {
+        data: { full_name: f.full_name, emp_code: f.emp_code, phone: f.phone, dept: f.dept, position: f.position, role: f.role },
+        emailRedirectTo: window.location.origin + '/welcome',   // คลิกลิงก์ยืนยันแล้วไปหน้า "ยืนยันอีเมลเรียบร้อย"
+      },
     });
     setBusy(false);
     if (error) { setErr('สมัครไม่สำเร็จ: ' + error.message); return; }
@@ -90,6 +98,9 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   async function signOut() { await supabase!.auth.signOut(); }
 
   if (!ready) return <div style={{ padding: 40, fontFamily: 'Sarabun,sans-serif' }}>กำลังโหลด…</div>;
+
+  // หน้าสาธารณะ (เช่น /welcome ยืนยันอีเมล) แสดงได้เลยไม่ต้องล็อกอิน
+  if (PUBLIC_PATHS.includes(pathname)) return <>{children}</>;
 
   if (supabase && (!session || mode === 'recovery')) {
     const titleMap: Record<string, string> = { login: 'เข้าสู่ระบบ', signup: 'สมัครใช้งานระบบ', forgot: 'ลืมรหัสผ่าน', recovery: 'ตั้งรหัสผ่านใหม่' };
