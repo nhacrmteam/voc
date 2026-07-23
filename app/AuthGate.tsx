@@ -8,12 +8,7 @@ import { supabase } from '../lib/supabaseClient';
 // หน้าที่เข้าได้โดยไม่ต้องล็อกอิน (ยืนยันอีเมล ฯลฯ)
 const PUBLIC_PATHS = ['/welcome'];
 
-const ROLES = [
-  { v: 'admin', l: 'Admin (แอดมิน)' },
-  { v: 'operator', l: 'พนักงาน (ผู้ปฏิบัติงาน)' },
-  { v: 'executive', l: 'ผู้บริหาร' },
-];
-const ROLE_TH: Record<string, string> = { admin: 'แอดมิน', operator: 'ผู้ปฏิบัติงาน', executive: 'ผู้บริหาร' };
+const ROLE_TH: Record<string, string> = { admin: 'แอดมิน', operator: 'ผู้ปฏิบัติงาน', executive: 'ผู้บริหาร', pending: 'รออนุมัติ' };
 
 const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1px solid #dfe6f0', borderRadius: 9, margin: '4px 0 12px', fontSize: 14, fontFamily: 'inherit', outlineColor: '#2e6cf0' };
 const lab: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#334155' };
@@ -37,9 +32,10 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
+  const [profileReady, setProfileReady] = useState(false);
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
-  const [f, setF] = useState({ full_name: '', emp_code: '', phone: '', dept: '', position: '', role: 'operator' });
+  const [f, setF] = useState({ full_name: '', emp_code: '', phone: '', dept: '', position: '' });
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
 
   useEffect(() => {
@@ -52,7 +48,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       if (event === 'PASSWORD_RECOVERY') { setMode('recovery'); setSession(null); return; }
       setSession(s);
-      if (s) loadProfile(s.user.id); else setProfile({ role: '', full_name: null });
+      if (s) loadProfile(s.user.id); else { setProfile({ role: '', full_name: null }); setProfileReady(false); }
     });
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -60,7 +56,8 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   async function loadProfile(uid: string) {
     if (!supabase) return;
     const { data } = await supabase.from('profiles').select('role, full_name').eq('id', uid).single();
-    setProfile({ role: data?.role || 'operator', full_name: data?.full_name || null });
+    setProfile({ role: data?.role || 'pending', full_name: data?.full_name || null });
+    setProfileReady(true);
   }
   async function doLogin(e: React.FormEvent) {
     e.preventDefault(); setErr(''); setMsg(''); setBusy(true);
@@ -72,14 +69,16 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     e.preventDefault(); setErr(''); setMsg(''); setBusy(true);
     const { data, error } = await supabase!.auth.signUp({
       email, password: pw,
+      // ไม่ส่ง role — บทบาทถูกกำหนดเป็น "รออนุมัติ" ที่ฝั่งฐานข้อมูลเสมอ (ความปลอดภัย)
       options: {
-        data: { full_name: f.full_name, emp_code: f.emp_code, phone: f.phone, dept: f.dept, position: f.position, role: f.role },
+        data: { full_name: f.full_name, emp_code: f.emp_code, phone: f.phone, dept: f.dept, position: f.position },
         emailRedirectTo: window.location.origin + '/welcome',   // คลิกลิงก์ยืนยันแล้วไปหน้า "ยืนยันอีเมลเรียบร้อย"
       },
     });
     setBusy(false);
     if (error) { setErr('สมัครไม่สำเร็จ: ' + error.message); return; }
-    if (!data.session) { setMode('login'); setMsg('สมัครสำเร็จ! กรุณายืนยันอีเมล (ตรวจกล่องอีเมล) แล้วเข้าสู่ระบบ'); }
+    setMode('login');
+    setMsg('สมัครสำเร็จ! กรุณายืนยันอีเมล จากนั้นรอแอดมินกำหนดบทบาทให้ก่อนเข้าใช้งาน');
   }
   async function doForgot(e: React.FormEvent) {
     e.preventDefault(); setErr(''); setMsg(''); setBusy(true);
@@ -166,10 +165,10 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
                   <div><label style={lab}>รหัสพนักงาน *</label><input style={inp} value={f.emp_code} onChange={set('emp_code')} required /></div>
                   <div><label style={lab}>เบอร์โทร</label><input style={inp} value={f.phone} onChange={set('phone')} /></div>
                   <div><label style={lab}>หน่วยงาน/ฝ่าย</label><input style={inp} value={f.dept} onChange={set('dept')} /></div>
-                  <div><label style={lab}>ตำแหน่ง</label><input style={inp} value={f.position} onChange={set('position')} /></div>
-                  <div><label style={lab}>เข้าใช้ในฐานะ *</label>
-                    <select style={inp} value={f.role} onChange={set('role')}>{ROLES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}</select>
-                  </div>
+                </div>
+                <label style={lab}>ตำแหน่ง</label><input style={inp} value={f.position} onChange={set('position')} />
+                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', fontSize: 12, padding: '8px 11px', borderRadius: 8, margin: '2px 0 12px' }}>
+                  ℹ️ หลังสมัคร แอดมินจะเป็นผู้กำหนดบทบาท (แอดมิน/ผู้ปฏิบัติงาน/ผู้บริหาร) ให้ก่อนจึงเข้าใช้งานได้
                 </div>
                 <label style={lab}>อีเมลพนักงาน *</label>
                 <input style={inp} value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="you@nha.co.th" />
@@ -201,6 +200,30 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
               </form>
             )}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ล็อกอินแล้วแต่โปรไฟล์ยังโหลดไม่เสร็จ → รอสักครู่ (กันหน้าเว็บกระพริบให้คนที่ยังรออนุมัติ)
+  if (supabase && session && !profileReady) {
+    return <div style={{ padding: 40, fontFamily: 'Sarabun,sans-serif' }}>กำลังตรวจสอบสิทธิ์…</div>;
+  }
+
+  // บทบาท "รออนุมัติ" → ยังเข้าใช้งานไม่ได้ จนกว่าแอดมินจะกำหนดบทบาท
+  if (supabase && session && profile.role === 'pending') {
+    return (
+      <div style={{ position: 'fixed', inset: 0, display: 'grid', placeItems: 'center', padding: 20,
+        background: 'linear-gradient(135deg,#0f1e46,#16285f 45%,#1f3a93)', fontFamily: 'Sarabun,sans-serif' }}>
+        <div style={{ background: '#fff', borderRadius: 20, maxWidth: 440, width: '100%', padding: '38px 34px', textAlign: 'center', boxShadow: '0 30px 80px rgba(0,0,0,.4)' }}>
+          <div style={{ margin: '0 auto 16px' }}><Logo size={54} /></div>
+          <div style={{ fontSize: 40, marginBottom: 6 }}>⏳</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>บัญชีรอการอนุมัติ</div>
+          <div style={{ fontSize: 14, color: '#475569', marginTop: 10, lineHeight: 1.7 }}>
+            สมัครใช้งานเรียบร้อยแล้ว<br />กรุณารอแอดมินกำหนดบทบาทให้ก่อนเข้าใช้งานระบบ<br />
+            <span style={{ fontSize: 12.5, color: '#94a3b8' }}>({session.user.email})</span>
+          </div>
+          <button onClick={signOut} style={{ marginTop: 22, padding: '11px 22px', background: '#1f3a93', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>ออกจากระบบ</button>
         </div>
       </div>
     );
