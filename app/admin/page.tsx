@@ -4,8 +4,9 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 
-const ROLE_TH: Record<string, string> = { admin: 'แอดมิน', operator: 'ผู้ปฏิบัติงาน', executive: 'ผู้บริหาร' };
+const ROLE_TH: Record<string, string> = { pending: 'รออนุมัติ', admin: 'แอดมิน', operator: 'ผู้ปฏิบัติงาน', executive: 'ผู้บริหาร' };
 const ROLE_RIGHT: Record<string, string> = {
+  pending: '⏳ ยังเข้าใช้งานไม่ได้ — รอกำหนดบทบาท',
   admin: 'นำเข้า/ส่งออก/แก้ไข/จัดการระบบ',
   operator: 'ดู/ส่งออก/อัปเดตสถานะ/นำเข้า',
   executive: 'ดู/ส่งออก (อ่านอย่างเดียว)',
@@ -39,6 +40,16 @@ const MOCK_USERS = [
 ];
 
 interface Profile { id: string; full_name: string | null; email: string | null; role: string; dept: string | null }
+interface ChConfig { id: string; api_enabled: boolean; webhook_secret: string }
+
+function genSecret() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  let s = 'voc_';
+  const buf = new Uint8Array(28);
+  crypto.getRandomValues(buf);
+  buf.forEach(b => { s += chars[b % chars.length]; });
+  return s;
+}
 
 const sel: React.CSSProperties = { padding: '6px 9px', border: '1px solid #dfe6f0', borderRadius: 8, fontSize: 12.5, fontFamily: 'inherit', background: '#fff' };
 
@@ -47,8 +58,10 @@ export default function AdminPage() {
   const [me, setMe] = useState('');
   const [users, setUsers] = useState<Profile[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [cfg, setCfg] = useState<Record<string, ChConfig>>({});
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const fnBase = (process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://<project>.supabase.co') + '/functions/v1/ingest-voc';
 
   useEffect(() => {
     if (!supabase) { setRole('mock'); setUsers(MOCK_USERS as any); return; }
@@ -68,6 +81,13 @@ export default function AdminPage() {
         c[ch.id] = count ?? 0;
       }));
       setCounts(c);
+      // โหลดตั้งค่า API ต่อช่องทาง (ต้องรัน supabase_channel_api.sql ก่อนจึงมีคอลัมน์)
+      const { data: chs } = await supabase!.from('channel').select('id, api_enabled, webhook_secret');
+      if (chs) {
+        const m: Record<string, ChConfig> = {};
+        (chs as any[]).forEach(x => { m[x.id] = { id: x.id, api_enabled: !!x.api_enabled, webhook_secret: x.webhook_secret ?? '' }; });
+        setCfg(m);
+      }
     });
   }, []);
 
@@ -80,6 +100,24 @@ export default function AdminPage() {
     setUsers(u => u.map(x => x.id === id ? { ...x, role: newRole } : x));
     setMsg('เปลี่ยนบทบาทเรียบร้อย');
   }
+
+  async function saveCfg(id: string) {
+    setMsg(''); setErr('');
+    const c = cfg[id]; if (!c) return;
+    if (role === 'mock') { setMsg('บันทึกตั้งค่า API (สาธิต) เรียบร้อย'); return; }
+    const { error } = await supabase!.from('channel')
+      .update({ api_enabled: c.api_enabled, webhook_secret: c.webhook_secret || null }).eq('id', id);
+    if (error) setErr('บันทึกไม่สำเร็จ: ' + error.message + (error.message.includes('column') ? ' — กรุณารัน supabase_channel_api.sql ก่อน' : ''));
+    else setMsg('บันทึกตั้งค่า API ของช่องทาง ' + id + ' เรียบร้อย');
+  }
+  function setC(id: string, patch: Partial<ChConfig>) {
+    setCfg(m => {
+      const cur: ChConfig = m[id] ?? { id, api_enabled: false, webhook_secret: '' };
+      return { ...m, [id]: { ...cur, ...patch } };
+    });
+  }
+
+  const pendingCount = users.filter(u => u.role === 'pending').length;
 
   if (role === null) return <div className="content" style={{ padding: 24 }}>กำลังโหลด…</div>;
   if (role !== 'admin' && role !== 'mock') {
@@ -100,12 +138,12 @@ export default function AdminPage() {
 
         {/* ผู้ใช้งานและบทบาท */}
         <div className="card">
-          <h3>👥 ผู้ใช้งานและบทบาท</h3>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>ผู้ใช้ใหม่สมัครผ่านหน้า &ldquo;สมัครใช้งาน&rdquo; แล้วแอดมินปรับบทบาทที่นี่</div>
+          <h3>👥 ผู้ใช้งานและบทบาท {pendingCount > 0 && <span style={{ fontSize: 12.5, color: '#b45309', background: '#fef3c7', padding: '2px 9px', borderRadius: 20, marginLeft: 6 }}>⏳ รออนุมัติ {pendingCount}</span>}</h3>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>ผู้ใช้ใหม่สมัครผ่านหน้า &ldquo;สมัครใช้งาน&rdquo; และเริ่มต้นเป็น &ldquo;รออนุมัติ&rdquo; เสมอ — เลือกบทบาทให้ที่นี่เพื่อเปิดสิทธิ์เข้าใช้งาน</div>
           <table>
             <thead><tr><th>ผู้ใช้</th><th>อีเมล</th><th>หน่วยงาน</th><th>บทบาท</th><th>สิทธิ์</th></tr></thead>
-            <tbody>{users.map(u => (
-              <tr key={u.id}>
+            <tbody>{users.slice().sort((a, b) => (a.role === 'pending' ? -1 : 0) - (b.role === 'pending' ? -1 : 0)).map(u => (
+              <tr key={u.id} style={u.role === 'pending' ? { background: '#fffbeb' } : undefined}>
                 <td>{u.full_name || '-'}{u.id === me ? ' (คุณ)' : ''}</td>
                 <td>{u.email || '-'}</td>
                 <td>{u.dept || '-'}</td>
@@ -134,6 +172,45 @@ export default function AdminPage() {
             ))}</tbody>
           </table>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>* นำเข้าข้อมูลจากทุกช่องทางได้ที่เมนู &ldquo;📤 นำเข้าข้อมูล&rdquo; — เรียลไทม์เฉพาะ Social (เชื่อม API ในเฟสถัดไป)</div>
+        </div>
+
+        {/* ตั้งค่า API รับข้อมูลเรียลไทม์ */}
+        <div className="card">
+          <h3>🔌 ตั้งค่า API รับข้อมูลเรียลไทม์ (Webhook)</h3>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 6 }}>
+            Endpoint กลาง (ทุกช่องทางใช้ URL เดียวกัน แยกด้วย channel_id + secret):
+          </div>
+          <code style={{ display: 'block', background: '#f1f5f9', borderRadius: 8, padding: '8px 10px', fontSize: 12, marginBottom: 12, wordBreak: 'break-all' }}>{fnBase}</code>
+          <table>
+            <thead><tr><th>ช่องทาง</th><th>เปิดรับ API</th><th>Webhook Secret</th><th></th></tr></thead>
+            <tbody>{CHANNELS.map(ch => {
+              const c = cfg[ch.id] || { id: ch.id, api_enabled: false, webhook_secret: '' };
+              return (
+                <tr key={ch.id}>
+                  <td>{ch.name}<div style={{ fontSize: 11, color: 'var(--muted)' }}>channel_id: <code>{ch.id}</code></div></td>
+                  <td>
+                    <label style={{ cursor: 'pointer', fontSize: 12.5 }}>
+                      <input type="checkbox" checked={c.api_enabled} onChange={e => setC(ch.id, { api_enabled: e.target.checked })} /> เปิด
+                    </label>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input style={{ ...sel, width: 210, fontFamily: 'monospace', fontSize: 11.5 }} value={c.webhook_secret}
+                        onChange={e => setC(ch.id, { webhook_secret: e.target.value })} placeholder="ยังไม่ตั้ง secret" />
+                      <button className="btn" style={{ padding: '6px 10px', fontSize: 12 }} type="button"
+                        onClick={() => setC(ch.id, { webhook_secret: genSecret() })}>สุ่ม</button>
+                    </div>
+                  </td>
+                  <td><button className="btn" style={{ padding: '6px 12px', fontSize: 12 }} type="button" onClick={() => saveCfg(ch.id)}>บันทึก</button></td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, lineHeight: 1.7 }}>
+            วิธีใช้: ระบบต้นทางส่ง <code>POST</code> มาที่ endpoint พร้อม header <code>x-voc-secret</code> = secret ของช่องทาง<br />
+            รูปแบบข้อมูล: <code>{'{ "channel_id": "call", "text": "ข้อความลูกค้า", "source": "Call Center 1615" }'}</code> หรือ LINE webhook ส่งตรงได้เลย (channel_id = social อัตโนมัติ)<br />
+            ดูวิธีเชื่อม LINE OA / Facebook / Google Forms / Email ทีละขั้นในไฟล์ <b>เชื่อมต่อ_API_ช่องทาง.md</b>
+          </div>
         </div>
 
         {/* Data Mapping & Dictionary */}
