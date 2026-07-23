@@ -11,14 +11,36 @@ const COL: Record<string, string> = {
   'รับเรื่อง': '#94a3b8', 'ส่งต่อหน่วยงานที่รับผิดชอบ': '#4aa3ff', 'กำลังดำเนินการ': '#2e6cf0',
   'รอข้อมูลเพิ่มเติม': '#f59e0b', 'ติดตามผล': '#8b5cf6', 'ดำเนินการเสร็จ/ปิดเรื่อง': '#16a34a',
 };
-// ช่วงเวลา (ปีงบประมาณราชการ 2569: ต.ค.68–ก.ย.69)
-const PERIODS: { k: string; label: string; from: string; to: string }[] = [
-  { k: 'q1', label: 'ไตรมาส 1 (ต.ค.–ธ.ค.)', from: '2025-10-01', to: '2025-12-31' },
-  { k: 'q2', label: 'ไตรมาส 2 (ม.ค.–มี.ค.)', from: '2026-01-01', to: '2026-03-31' },
-  { k: 'q3', label: 'ไตรมาส 3 (เม.ย.–มิ.ย.)', from: '2026-04-01', to: '2026-06-30' },
-  { k: 'q4', label: 'ไตรมาส 4 (ก.ค.–ก.ย.)', from: '2026-07-01', to: '2026-09-30' },
-  { k: 'year', label: 'ปีงบประมาณ 2569 (สะสม)', from: '2025-10-01', to: '2026-09-30' },
+// ปีงบประมาณ (พ.ศ.) — ปีงบ Y เริ่ม 1 ต.ค. ปี (Y-1)
+// คำนวณปีงบ+ไตรมาส "ปัจจุบัน" จากวันที่จริง (เลื่อนตามเวลาเอง)
+function currentFYQuarter(): { be: number; q: string } {
+  const d = new Date();
+  const y = d.getFullYear(), mo = d.getMonth();   // 0=ม.ค. ... 9=ต.ค.
+  const be = (mo >= 9 ? y + 1 : y) + 543;
+  const q = mo >= 9 ? 'q1' : mo <= 2 ? 'q2' : mo <= 5 ? 'q3' : 'q4';
+  return { be, q };
+}
+const QUARTERS: { k: string; label: string }[] = [
+  { k: 'year', label: 'ทั้งปี (สะสม)' },
+  { k: 'q1', label: 'ไตรมาส 1 (ต.ค.–ธ.ค.)' },
+  { k: 'q2', label: 'ไตรมาส 2 (ม.ค.–มี.ค.)' },
+  { k: 'q3', label: 'ไตรมาส 3 (เม.ย.–มิ.ย.)' },
+  { k: 'q4', label: 'ไตรมาส 4 (ก.ค.–ก.ย.)' },
 ];
+// คืนช่วงวันที่ (ค.ศ.) ของปีงบ be + ไตรมาส q
+function periodRange(be: number, q: string): { from: string; to: string } {
+  const s = be - 543 - 1;   // ปี ค.ศ. เริ่มต้น (ต.ค.)
+  const e = be - 543;       // ปี ค.ศ. สิ้นสุด (ก.ย.)
+  const m: Record<string, [string, string]> = {
+    q1: [`${s}-10-01`, `${s}-12-31`],
+    q2: [`${e}-01-01`, `${e}-03-31`],
+    q3: [`${e}-04-01`, `${e}-06-30`],
+    q4: [`${e}-07-01`, `${e}-09-30`],
+    year: [`${s}-10-01`, `${e}-09-30`],
+  };
+  const [from, to] = m[q] || m.year;
+  return { from, to };
+}
 
 function Spark({ arr, color }: { arr: number[]; color: string }) {
   if (arr.length < 2) return null;
@@ -41,11 +63,20 @@ function dateSeries(rows: Voc[], from: string, to: string, buckets = 12) {
 const sel: React.CSSProperties = { padding: '8px 11px', border: '1px solid var(--line)', borderRadius: 9, fontSize: 13, fontFamily: 'inherit', background: 'var(--card,#fff)', color: 'inherit' };
 
 export default function DashboardView({ rows }: { rows: Voc[] }) {
-  const [period, setPeriod] = useState('q3');
+  const [maxFY, setMaxFY] = useState(2569);        // ปีงบล่าสุด (อ้างอิงวันปัจจุบัน)
+  const [beYear, setBeYear] = useState(2569);
+  const [quarter, setQuarter] = useState('q3');
   const [product, setProduct] = useState('all');
   const [ptype, setPtype] = useState('all');
-  const [proj, setProj] = useState('all');
+  const [projText, setProjText] = useState('');   // ช่องพิมพ์ค้นหาชื่อโครงการ
   const [tick, setTick] = useState<Voc | null>(null);
+
+  // ตั้งค่าเริ่มต้นเป็นปีงบ+ไตรมาสปัจจุบันตอนโหลด (เลื่อนตามเวลาเอง)
+  useEffect(() => {
+    const { be, q } = currentFYQuarter();
+    setMaxFY(be); setBeYear(be); setQuarter(q);
+  }, []);
+  const YEARS = [maxFY, maxFY - 1, maxFY - 2];
 
   // LIVE ticker — หมุนแสดงเสียงลูกค้าล่าสุด
   useEffect(() => {
@@ -64,13 +95,16 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
   }, [rows]);
   const projOptions = ptype === 'all' ? projectNames : projectNames.filter(p => p.type === ptype);
 
-  const pd = PERIODS.find(p => p.k === period)!;
+  const range = periodRange(beYear, quarter);
+  const qLabel = QUARTERS.find(q => q.k === quarter)?.label || '';
+  const pd = { from: range.from, to: range.to, label: `ปีงบ ${beYear} · ${qLabel}` };
+  const projQ = projText.trim().toLowerCase();
   // กรองตามตัวกรองทั้งหมด (ยกเว้นช่วงเวลา) — ใช้กับการ์ดเวลา
   const fBase = useMemo(() => rows.filter(r =>
     (product === 'all' || r.product === product) &&
     (ptype === 'all' || r.projectType === ptype) &&
-    (proj === 'all' || r.project === proj)
-  ), [rows, product, ptype, proj]);
+    (!projQ || (r.project || '').toLowerCase().includes(projQ))
+  ), [rows, product, ptype, projQ]);
   // กรองตามช่วงเวลาที่เลือกด้วย — ใช้กับ KPI/Pipeline
   const f = useMemo(() => fBase.filter(r => r.occurredAt >= pd.from && r.occurredAt <= pd.to), [fBase, pd]);
 
@@ -115,23 +149,32 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
       <header className="top">
         <h1>ภาพรวมเสียงของลูกค้า</h1>
         <div className="sub">สรุปข้อมูลเชิงปริมาณและคุณภาพจาก 8 ช่องทาง</div>
-        {/* แถบตัวกรอง */}
+        {/* แถบตัวกรอง: ปีงบ → ไตรมาส → ผลิตภัณฑ์ → ประเภท → ชื่อโครงการ(ค้นหา) */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-          <select style={sel} value={period} onChange={e => setPeriod(e.target.value)}>
-            {PERIODS.map(p => <option key={p.k} value={p.k}>{p.label}</option>)}
+          <select style={sel} value={beYear} onChange={e => setBeYear(Number(e.target.value))}>
+            {YEARS.map(y => <option key={y} value={y}>ปีงบประมาณ {y}</option>)}
+          </select>
+          <select style={sel} value={quarter} onChange={e => setQuarter(e.target.value)}>
+            {QUARTERS.map(q => <option key={q.k} value={q.k}>{q.label}</option>)}
           </select>
           <select style={sel} value={product} onChange={e => setProduct(e.target.value)}>
             <option value="all">ทุกกลุ่มผลิตภัณฑ์</option>
             {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
-          <select style={sel} value={ptype} onChange={e => { setPtype(e.target.value); setProj('all'); }}>
+          <select style={sel} value={ptype} onChange={e => { setPtype(e.target.value); setProjText(''); }}>
             <option value="all">ทุกประเภทโครงการ</option>
             {PROJECT_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
-          <select style={sel} value={proj} onChange={e => setProj(e.target.value)}>
-            <option value="all">ทุกชื่อโครงการ{ptype !== 'all' ? ` (${projOptions.length})` : ''}</option>
-            {projOptions.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
-          </select>
+          <div style={{ position: 'relative' }}>
+            <input list="dash-projects" style={{ ...sel, width: 220 }} value={projText}
+              onChange={e => setProjText(e.target.value)}
+              placeholder={`🔎 ทุกชื่อโครงการ${ptype !== 'all' ? ` (${projOptions.length})` : ''}`} />
+            <datalist id="dash-projects">
+              {projOptions.map(p => <option key={p.name} value={p.name} />)}
+            </datalist>
+            {projText && <button type="button" onClick={() => setProjText('')} title="ล้าง"
+              style={{ position: 'absolute', right: 6, top: 6, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--muted)' }}>✕</button>}
+          </div>
         </div>
       </header>
 
