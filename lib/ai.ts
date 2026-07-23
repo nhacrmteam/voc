@@ -94,9 +94,34 @@ export function aiPriority(s: AiSent, text: string): Priority {
   return 'Low';
 }
 
-// ---------- วิเคราะห์ครบชุด ----------
+// ---------- วิเคราะห์ครบชุด (rule-based) ----------
 export interface AiResult extends AiSent { journey: string; catProduct: string; catSales: string; owner: string; priority: Priority }
 export function analyzeText(text: string, channel?: string): AiResult {
   const s = aiSentiment(text);
   return { ...s, journey: aiJourney(text), catProduct: catProd(text), catSales: catSal(text), owner: ownerFor(text, channel), priority: aiPriority(s, text) };
+}
+
+// ---------- วิเคราะห์ด้วย LLM จริง (Edge Function analyze-voc) + fallback เป็น rule ----------
+// via: 'llm' = ผลจาก LLM, 'rule' = fallback keyword (LLM ใช้ไม่ได้/ยังไม่ตั้งค่า)
+export type SmartResult = AiResult & { via: 'llm' | 'rule' };
+export async function analyzeSmart(text: string, channel?: string): Promise<SmartResult> {
+  const { supabase } = await import('./supabaseClient');
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.functions.invoke('analyze-voc', { body: { text, channel } });
+      if (!error && data && data.sentiment && !data.error) {
+        return {
+          sentiment: data.sentiment, conf: data.confidence ?? 70, uncertain: !!data.uncertain,
+          reason: data.reason || 'วิเคราะห์โดย LLM',
+          journey: data.journey ?? aiJourney(text),
+          catProduct: data.catProduct ?? catProd(text),
+          catSales: data.catSales ?? catSal(text),
+          owner: data.owner ?? ownerFor(text, channel),
+          priority: data.priority ?? 'Low',
+          via: 'llm',
+        };
+      }
+    } catch { /* ตกลงมาใช้ rule-based */ }
+  }
+  return { ...analyzeText(text, channel), via: 'rule' };
 }
