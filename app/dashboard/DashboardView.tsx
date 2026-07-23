@@ -95,9 +95,12 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
   }, [rows]);
   const projOptions = ptype === 'all' ? projectNames : projectNames.filter(p => p.type === ptype);
 
+  const allTime = beYear === 0;   // 0 = ทั้งหมด ตั้งแต่มีระบบ
   const range = periodRange(beYear, quarter);
   const qLabel = QUARTERS.find(q => q.k === quarter)?.label || '';
-  const pd = { from: range.from, to: range.to, label: `ปีงบ ${beYear} · ${qLabel}` };
+  const pd = allTime
+    ? { from: '0000-01-01', to: '9999-12-31', label: 'ทั้งหมด (ตั้งแต่มีระบบ)' }
+    : { from: range.from, to: range.to, label: `ปีงบ ${beYear} · ${qLabel}` };
   const projQ = projText.trim().toLowerCase();
   // กรองตามตัวกรองทั้งหมด (ยกเว้นช่วงเวลา) — ใช้กับการ์ดเวลา
   const fBase = useMemo(() => rows.filter(r =>
@@ -118,6 +121,14 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
   f.forEach(r => pipe[r.status] = (pipe[r.status] || 0) + 1);
   const pipeTotal = f.length || 1;
   const doneKey: string = 'ดำเนินการเสร็จ/ปิดเรื่อง';
+
+  // สรุปสะสมทั้งองค์กร (ทุกเสียงตั้งแต่มีระบบ — ไม่ขึ้นกับตัวกรอง)
+  const allTotal = rows.length;
+  const allClosed = rows.filter(r => r.status === doneKey).length;
+  const allOpen = allTotal - allClosed;
+  const allClosedPct = allTotal ? Math.round(allClosed / allTotal * 100) : 0;
+  const allPos = rows.filter(r => r.sentiment === 'Positive').length;
+  const allPosPct = allTotal ? Math.round(allPos / allTotal * 100) : 0;
 
   // การ์ดเวลา (วันนี้/7วัน/เดือน/ปีงบ) จาก fBase — อ้างอิงวันที่ล่าสุดในข้อมูล
   const dates = fBase.map(r => r.occurredAt).filter(Boolean).sort();
@@ -152,9 +163,11 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
         {/* แถบตัวกรอง: ปีงบ → ไตรมาส → ผลิตภัณฑ์ → ประเภท → ชื่อโครงการ(ค้นหา) */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
           <select style={sel} value={beYear} onChange={e => setBeYear(Number(e.target.value))}>
+            <option value={0}>ทั้งหมด (ตั้งแต่มีระบบ)</option>
             {YEARS.map(y => <option key={y} value={y}>ปีงบประมาณ {y}</option>)}
           </select>
-          <select style={sel} value={quarter} onChange={e => setQuarter(e.target.value)}>
+          <select style={sel} value={quarter} onChange={e => setQuarter(e.target.value)} disabled={allTime}
+            title={allTime ? 'เลือก "ทั้งหมด" อยู่ — ไม่แยกไตรมาส' : ''}>
             {QUARTERS.map(q => <option key={q.k} value={q.k}>{q.label}</option>)}
           </select>
           <select style={sel} value={product} onChange={e => setProduct(e.target.value)}>
@@ -190,6 +203,18 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
           </div>
         </div>
         <style>{`@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.6)}70%{box-shadow:0 0 0 7px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}`}</style>
+
+        {/* สรุปสะสมทั้งองค์กร (ทุกเสียงตั้งแต่มีระบบ — ค้างไว้เสมอ ไม่ขึ้นกับตัวกรอง) */}
+        <div className="card" style={{ background: 'linear-gradient(135deg,#1f3a93,#16285f)', color: '#fff', border: 'none' }}>
+          <div style={{ fontSize: 12.5, opacity: .85, marginBottom: 10 }}>🗂️ สรุปสะสมทั้งองค์กร — ทุกเสียงลูกค้าตั้งแต่เริ่มมีระบบ</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 14 }}>
+            <div><div style={{ fontSize: 11.5, opacity: .8 }}>เสียงลูกค้าสะสมทั้งหมด</div><div style={{ fontSize: 27, fontWeight: 700 }}>{allTotal.toLocaleString()}</div></div>
+            <div><div style={{ fontSize: 11.5, opacity: .8 }}>ปิดเรื่องสะสม</div><div style={{ fontSize: 27, fontWeight: 700, color: '#86efac' }}>{allClosed.toLocaleString()}</div></div>
+            <div><div style={{ fontSize: 11.5, opacity: .8 }}>อยู่ระหว่างดำเนินการ</div><div style={{ fontSize: 27, fontWeight: 700, color: '#fcd34d' }}>{allOpen.toLocaleString()}</div></div>
+            <div><div style={{ fontSize: 11.5, opacity: .8 }}>% ปิดเรื่องสำเร็จ</div><div style={{ fontSize: 27, fontWeight: 700 }}>{allClosedPct}%</div></div>
+            <div><div style={{ fontSize: 11.5, opacity: .8 }}>% เสียงเชิงบวกรวม</div><div style={{ fontSize: 27, fontWeight: 700, color: '#86efac' }}>{allPosPct}%</div></div>
+          </div>
+        </div>
 
         {/* การ์ดเวลา + sparkline */}
         <div className="cards">
