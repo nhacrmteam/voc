@@ -22,7 +22,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthGate>
           <div className="app">
             <aside className="side">
-              <div className="brand">กคช · VOC<span>Voice of Customer · 2569</span></div>
+              <div className="brand">
+                <span className="brand-logo" aria-hidden="true">
+                  <svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="7" y="7" width="86" height="86" rx="13" fill="none" stroke="#2e6cf0" strokeWidth="8" />
+                    <path d="M22 24 L48 55 L48 74 L38 74" fill="none" stroke="#2e6cf0" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M78 24 L52 55 L52 74 L62 74" fill="none" stroke="#2e6cf0" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                <div className="brand-text">กคช · VOC<span>Voice of Customer · 2569</span></div>
+              </div>
               <NavMenu />
               <ThemeToggle />
             </aside>
