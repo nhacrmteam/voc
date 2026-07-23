@@ -59,6 +59,9 @@ const MOCK: Voc[] = Array.from({ length: 60 }, (_, i) => {
   const prio: Priority = v.sent === 'Negative' ? (i % 3 === 0 ? 'High' : 'Medium') : (i % 4 === 0 ? 'Medium' : 'Low');
   const imported = ['ฝ่ายงานสำนักงานใหญ่', 'สำนักงานสาขาทั่วประเทศ', 'ทีมรณรงค์ขาย', 'แบบประเมินความพึงพอใจ'].includes(ch);
   const day = 10 + (i % 16);
+  // กระจายวันที่ข้ามปีงบประมาณ 2569 (ต.ค.68–มิ.ย.69) เพื่อให้ตัวกรองไตรมาสเห็นผลในโหมดสาธิต
+  const MONTHS = ['2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06'];
+  const mm = MONTHS[i % MONTHS.length];
   return {
     id: String(i + 1), ref: 'VOC-' + (2569000 + i),
     channel: ch, source: ch === 'Social Media' ? (i % 2 ? 'Line OA' : 'Facebook') : ch,
@@ -67,8 +70,8 @@ const MOCK: Voc[] = Array.from({ length: 60 }, (_, i) => {
     journey: pick(['Awareness', 'Consideration', 'Purchase', 'Service', 'Loyalty', 'Win Back'], i),
     topic: v.topic, voice: v.voice, sentiment: v.sent, priority: prio,
     owner: v.owner, status: pick(CASE_STATUS, i),
-    occurredAt: `2026-06-${String(day).padStart(2, '0')}`,
-    importedAt: imported ? '2026-06-26' : `2026-06-${String(day).padStart(2, '0')}`,
+    occurredAt: `${mm}-${String(day).padStart(2, '0')}`,
+    importedAt: imported ? '2026-06-26' : `${mm}-${String(day).padStart(2, '0')}`,
     imported, catProduct: v.cat, catSales: 'การให้ข้อมูลโครงการ',
     ...(az => ({ sentConf: az.conf, sentUncertain: az.uncertain, sentManual: false, sentReason: az.reason }))(aiSentiment(v.voice)),
   };
