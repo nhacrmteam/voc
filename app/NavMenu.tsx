@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabaseClient';
 
 const ITEMS: { href: string; label: string; staffOnly?: boolean; adminOnly?: boolean }[] = [
   { href: '/dashboard', label: '📊 ภาพรวม' },
-  { href: '/channels', label: '📥 8 ช่องทาง' },
+  { href: '/channels', label: '📥 8 ช่องทางรับฟังเสียงลูกค้า' },
   { href: '/voc', label: '💬 รายการ VOC' },
   { href: '/import', label: '📤 นำเข้าข้อมูล', adminOnly: true },
   { href: '/analyze', label: '🤖 AI วิเคราะห์' },
