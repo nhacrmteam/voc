@@ -66,7 +66,6 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
   const [maxFY, setMaxFY] = useState(2569);        // ปีงบล่าสุด (อ้างอิงวันปัจจุบัน)
   const [beYear, setBeYear] = useState(2569);
   const [quarter, setQuarter] = useState('q3');
-  const [product, setProduct] = useState('all');
   const [ptype, setPtype] = useState('all');
   const [projText, setProjText] = useState('');   // ช่องพิมพ์ค้นหาชื่อโครงการ
   const [tick, setTick] = useState<Voc | null>(null);
@@ -104,10 +103,9 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
   const projQ = projText.trim().toLowerCase();
   // กรองตามตัวกรองทั้งหมด (ยกเว้นช่วงเวลา) — ใช้กับการ์ดเวลา
   const fBase = useMemo(() => rows.filter(r =>
-    (product === 'all' || r.product === product) &&
     (ptype === 'all' || r.projectType === ptype) &&
     (!projQ || (r.project || '').toLowerCase().includes(projQ))
-  ), [rows, product, ptype, projQ]);
+  ), [rows, ptype, projQ]);
   // กรองตามช่วงเวลาที่เลือกด้วย — ใช้กับ KPI/Pipeline
   const f = useMemo(() => fBase.filter(r => r.occurredAt >= pd.from && r.occurredAt <= pd.to), [fBase, pd]);
 
@@ -169,10 +167,6 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
           <select style={sel} value={quarter} onChange={e => setQuarter(e.target.value)} disabled={allTime}
             title={allTime ? 'เลือก "ทั้งหมด" อยู่ — ไม่แยกไตรมาส' : ''}>
             {QUARTERS.map(q => <option key={q.k} value={q.k}>{q.label}</option>)}
-          </select>
-          <select style={sel} value={product} onChange={e => setProduct(e.target.value)}>
-            <option value="all">ทุกกลุ่มผลิตภัณฑ์</option>
-            {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
           <select style={sel} value={ptype} onChange={e => { setPtype(e.target.value); setProjText(''); }}>
             <option value="all">ทุกประเภทโครงการ</option>
@@ -241,14 +235,12 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
           <Spark arr={trend} color="#1f3a93" />
         </div>
 
-        {/* Case Pipeline */}
+        {/* Case Pipeline — ยังไม่เปิดใช้งาน */}
         <div className="card">
           <h3>📋 สถานะการดำเนินการเรื่อง (Case Pipeline)</h3>
-          <div className="pipe">
-            {CASE_STATUS.map(s => { const w = pipeTotal ? (pipe[s] / pipeTotal * 100) : 0; return <div key={s} title={s + ': ' + pipe[s]} style={{ width: w + '%', background: COL[s] }} />; })}
-          </div>
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
-            {CASE_STATUS.map(s => <span key={s}><b style={{ color: COL[s] }}>●</b> {s}: <b>{pipe[s]}</b></span>)}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '18px 4px', color: 'var(--muted)', fontSize: 13.5 }}>
+            <span style={{ fontSize: 20 }}>🚧</span>
+            <span>ยังไม่เปิดใช้งาน — อยู่ระหว่างการพัฒนา จะเปิดให้ใช้งานในเฟสถัดไป</span>
           </div>
         </div>
 
