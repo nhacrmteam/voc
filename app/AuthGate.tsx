@@ -109,8 +109,23 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
         <div style={{ display: 'flex', flexWrap: 'wrap', width: '100%', maxWidth: 940, background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 30px 80px rgba(0,0,0,.4)', margin: '24px 0' }}>
 
           {/* ซ้าย: แผงแบรนด์ */}
-          <div style={{ flex: '1 1 340px', minWidth: 300, background: 'linear-gradient(160deg,#1f3a93,#16285f)', color: '#fff', padding: '40px 36px', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ flex: '1 1 340px', minWidth: 300, position: 'relative', overflow: 'hidden', background: 'linear-gradient(160deg,#1f3a93,#16285f)', color: '#fff', padding: '40px 36px', display: 'flex', flexDirection: 'column' }}>
+            {/* กราฟิกพื้นหลัง: คลื่นเสียง + กล่องข้อความ (จาง ๆ) */}
+            <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice" aria-hidden="true"
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.12, pointerEvents: 'none' }}>
+              <g fill="none" stroke="#fff" strokeWidth="2">
+                <circle cx="330" cy="90" r="30" /><circle cx="330" cy="90" r="52" /><circle cx="330" cy="90" r="74" />
+                <rect x="40" y="360" width="150" height="80" rx="16" /><path d="M70 440 l0 24 l24 -24" />
+                <rect x="230" y="410" width="120" height="64" rx="14" /><path d="M320 474 l0 18 l-18 -18" />
+              </g>
+              <g fill="#fff">
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => {
+                  const h = [24, 44, 70, 40, 90, 60, 100, 52, 30, 64][i];
+                  return <rect key={i} x={30 + i * 20} y={230 - h / 2} width="8" height={h} rx="4" />;
+                })}
+              </g>
+            </svg>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ background: '#fff', borderRadius: 14, padding: 8, display: 'grid', placeItems: 'center' }}><Logo size={52} /></div>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 18, lineHeight: 1.2 }}>การเคหะแห่งชาติ</div>
@@ -119,13 +134,9 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
             </div>
             <div style={{ height: 1, background: 'rgba(255,255,255,.18)', margin: '26px 0 22px' }} />
             <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.35 }}>VOC Web Application<br />รวบรวมเสียงของลูกค้า</div>
-            <div style={{ fontSize: 13, opacity: .85, marginTop: 12, lineHeight: 1.7 }}>
+            <div style={{ position: 'relative', fontSize: 13, opacity: .85, marginTop: 12, lineHeight: 1.7 }}>
               การเคหะแห่งชาติ · ระบบ Voice of Customer ปี 2569<br />
               รวบรวม วิเคราะห์ และรายงานเสียงลูกค้าจาก 8 ช่องทาง
-            </div>
-            <div style={{ marginTop: 'auto', paddingTop: 26, fontSize: 12.5, opacity: .9, lineHeight: 2 }}>
-              🔐 เข้าใช้งานตามบทบาท (Role-Based Access)<br />
-              👤 แอดมิน · พนักงาน · ผู้บริหาร
             </div>
           </div>
 
@@ -200,6 +211,12 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
               </form>
             )}
           </div>
+        </div>
+
+        {/* Footer หน้าล็อกอิน */}
+        <div style={{ position: 'absolute', bottom: 12, left: 0, right: 0, textAlign: 'center', color: 'rgba(255,255,255,.75)', fontSize: 11.5, lineHeight: 1.9, padding: '0 16px' }}>
+          <div>Produced by the Marketing Department, National Housing Authority · Developed by Eksunee Kruttawee (AI-assisted)</div>
+          <div>© {new Date().getFullYear()} National Housing Authority of Thailand. All rights reserved.</div>
         </div>
       </div>
     );
