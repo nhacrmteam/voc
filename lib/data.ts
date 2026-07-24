@@ -179,7 +179,13 @@ export async function channelStats() {
   const all = await fetchAll();
   return CHANNELS.map(name => {
     const rows = all.filter(x => x.channel === name);
+    const t = rows.length || 1;
+    const pos = rows.filter(x => x.sentiment === 'Positive').length;
+    const neu = rows.filter(x => x.sentiment === 'Neutral').length;
     const neg = rows.filter(x => x.sentiment === 'Negative').length;
-    return { name, count: rows.length, negPct: rows.length ? Math.round(neg / rows.length * 100) : 0 };
+    return {
+      name, count: rows.length,
+      posPct: Math.round(pos / t * 100), neuPct: Math.round(neu / t * 100), negPct: Math.round(neg / t * 100),
+    };
   });
 }
