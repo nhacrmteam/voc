@@ -4,13 +4,8 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import type { Voc } from '../../lib/data';
-import { CASE_STATUS, PROJECT_TYPES } from '../../lib/data';
+import { PROJECT_TYPES } from '../../lib/data';
 
-const PRODUCTS = ['อาคารเพื่อขาย/เช่าซื้อ', 'อาคารเช่า', 'เช่าจัดประโยชน์'];
-const COL: Record<string, string> = {
-  'รับเรื่อง': '#94a3b8', 'ส่งต่อหน่วยงานที่รับผิดชอบ': '#4aa3ff', 'กำลังดำเนินการ': '#2e6cf0',
-  'รอข้อมูลเพิ่มเติม': '#f59e0b', 'ติดตามผล': '#8b5cf6', 'ดำเนินการเสร็จ/ปิดเรื่อง': '#16a34a',
-};
 // ปีงบประมาณ (พ.ศ.) — ปีงบ Y เริ่ม 1 ต.ค. ปี (Y-1)
 // คำนวณปีงบ+ไตรมาส "ปัจจุบัน" จากวันที่จริง (เลื่อนตามเวลาเอง)
 function currentFYQuarter(): { be: number; q: string } {
@@ -115,18 +110,17 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
   const high = f.filter(r => r.priority === 'High').length;
   const posPct = Math.round(pos / total * 100), negPct = Math.round(neg / total * 100);
 
-  const pipe: Record<string, number> = {}; CASE_STATUS.forEach(s => pipe[s] = 0);
-  f.forEach(r => pipe[r.status] = (pipe[r.status] || 0) + 1);
-  const pipeTotal = f.length || 1;
-  const doneKey: string = 'ดำเนินการเสร็จ/ปิดเรื่อง';
-
-  // สรุปสะสมทั้งองค์กร (ทุกเสียงตั้งแต่มีระบบ — ไม่ขึ้นกับตัวกรอง)
+  // สรุปสะสมทั้งองค์กร (ทุกเสียงตั้งแต่มีระบบ — ไม่ขึ้นกับตัวกรอง) — เน้น monitoring
   const allTotal = rows.length;
-  const allClosed = rows.filter(r => r.status === doneKey).length;
-  const allOpen = allTotal - allClosed;
-  const allClosedPct = allTotal ? Math.round(allClosed / allTotal * 100) : 0;
   const allPos = rows.filter(r => r.sentiment === 'Positive').length;
+  const allNeg = rows.filter(r => r.sentiment === 'Negative').length;
+  const allHigh = rows.filter(r => r.priority === 'High').length;
   const allPosPct = allTotal ? Math.round(allPos / allTotal * 100) : 0;
+  const allNegPct = allTotal ? Math.round(allNeg / allTotal * 100) : 0;
+  // ประเด็นซ้ำ (recurring) = หัวข้อที่พบตั้งแต่ 3 ครั้งขึ้นไป
+  const topicCountAll: Record<string, number> = {};
+  rows.forEach(r => { if (r.topic) topicCountAll[r.topic] = (topicCountAll[r.topic] || 0) + 1; });
+  const recurringCount = Object.values(topicCountAll).filter(n => n >= 3).length;
 
   // การ์ดเวลา (วันนี้/7วัน/เดือน/ปีงบ) จาก fBase — อ้างอิงวันที่ล่าสุดในข้อมูล
   const dates = fBase.map(r => r.occurredAt).filter(Boolean).sort();
@@ -203,10 +197,10 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
           <div style={{ fontSize: 12.5, opacity: .85, marginBottom: 10 }}>🗂️ สรุปสะสมทั้งองค์กร — ทุกเสียงลูกค้าตั้งแต่เริ่มมีระบบ</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 14 }}>
             <div><div style={{ fontSize: 11.5, opacity: .8 }}>เสียงลูกค้าสะสมทั้งหมด</div><div style={{ fontSize: 27, fontWeight: 700 }}>{allTotal.toLocaleString()}</div></div>
-            <div><div style={{ fontSize: 11.5, opacity: .8 }}>ปิดเรื่องสะสม</div><div style={{ fontSize: 27, fontWeight: 700, color: '#86efac' }}>{allClosed.toLocaleString()}</div></div>
-            <div><div style={{ fontSize: 11.5, opacity: .8 }}>อยู่ระหว่างดำเนินการ</div><div style={{ fontSize: 27, fontWeight: 700, color: '#fcd34d' }}>{allOpen.toLocaleString()}</div></div>
-            <div><div style={{ fontSize: 11.5, opacity: .8 }}>% ปิดเรื่องสำเร็จ</div><div style={{ fontSize: 27, fontWeight: 700 }}>{allClosedPct}%</div></div>
             <div><div style={{ fontSize: 11.5, opacity: .8 }}>% เสียงเชิงบวกรวม</div><div style={{ fontSize: 27, fontWeight: 700, color: '#86efac' }}>{allPosPct}%</div></div>
+            <div><div style={{ fontSize: 11.5, opacity: .8 }}>% เสียงเชิงลบรวม</div><div style={{ fontSize: 27, fontWeight: 700, color: '#fca5a5' }}>{allNegPct}%</div></div>
+            <div><div style={{ fontSize: 11.5, opacity: .8 }}>เรื่องเร่งด่วนสะสม (High)</div><div style={{ fontSize: 27, fontWeight: 700, color: '#fcd34d' }}>{allHigh.toLocaleString()}</div></div>
+            <div><div style={{ fontSize: 11.5, opacity: .8 }}>ประเด็นเฝ้าระวัง (ซ้ำ ≥3)</div><div style={{ fontSize: 27, fontWeight: 700, color: '#fcd34d' }}>{recurringCount.toLocaleString()}</div></div>
           </div>
         </div>
 
@@ -233,15 +227,6 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
         <div className="card">
           <h3>📈 แนวโน้มจำนวนเสียงลูกค้า — {pd.label}</h3>
           <Spark arr={trend} color="#1f3a93" />
-        </div>
-
-        {/* Case Pipeline — ยังไม่เปิดใช้งาน */}
-        <div className="card">
-          <h3>📋 สถานะการดำเนินการเรื่อง (Case Pipeline)</h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '18px 4px', color: 'var(--muted)', fontSize: 13.5 }}>
-            <span style={{ fontSize: 20 }}>🚧</span>
-            <span>ยังไม่เปิดใช้งาน — อยู่ระหว่างการพัฒนา จะเปิดให้ใช้งานในเฟสถัดไป</span>
-          </div>
         </div>
 
         {/* ประเด็นจับตา + Top โครงการ */}
@@ -281,14 +266,14 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
         <div className="card">
           <h3>💬 รายการล่าสุด ({pd.label})</h3>
           <table>
-            <thead><tr><th>รหัส</th><th>วันที่ต้นทาง</th><th>ช่องทาง</th><th>โครงการ</th><th>หัวข้อ</th><th>Sentiment</th><th>สถานะ</th></tr></thead>
+            <thead><tr><th>รหัส</th><th>วันที่ต้นทาง</th><th>ช่องทาง</th><th>โครงการ</th><th>หัวข้อ</th><th>Sentiment</th><th>ความรุนแรง</th></tr></thead>
             <tbody>{f.slice(0, 15).map(r => (
               <tr key={r.id}>
                 <td><Link href={'/voc/' + r.id} className="tag">{r.ref}</Link></td>
                 <td>{r.occurredAt}{r.imported ? ' (ไฟล์)' : ''}</td>
                 <td>{r.channel}</td><td>{r.project}</td><td>{r.topic}</td>
                 <td><span className={'pill ' + (r.sentiment === 'Positive' ? 'p-pos' : r.sentiment === 'Negative' ? 'p-neg' : 'p-neu')}>{r.sentiment}</span></td>
-                <td>{r.status}</td>
+                <td><span className={'pill ' + (r.priority === 'High' ? 'p-hi' : r.priority === 'Medium' ? 'p-md' : 'p-lo')}>{r.priority}</span></td>
               </tr>))}
             </tbody>
           </table>
