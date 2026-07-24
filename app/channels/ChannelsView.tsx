@@ -2,12 +2,34 @@
 // ChannelsView — 8 ช่องทางรับฟังเสียงลูกค้า (interactive)
 // หน้ายิ้ม/นิ่ง/เศร้า + แถบเทียบช่องทาง + การ์ด hover ขยับ + คลิกดูรายละเอียดด้านล่าง + ปุ่มกลับ
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Voc } from '../../lib/data';
-import { CHANNELS } from '../../lib/data';
+import { CHANNELS, PROJECT_TYPES } from '../../lib/data';
 import { computeCloud } from '../../lib/cloud';
 import WordCloud from '../components/WordCloud';
 import TrendChart from '../components/TrendChart';
+
+const PRODUCTS = ['อาคารเพื่อขาย/เช่าซื้อ', 'อาคารเช่า', 'เช่าจัดประโยชน์'];
+const QUARTERS: { k: string; label: string }[] = [
+  { k: 'year', label: 'ทั้งปี (สะสม)' },
+  { k: 'q1', label: 'ไตรมาส 1 (ต.ค.–ธ.ค.)' },
+  { k: 'q2', label: 'ไตรมาส 2 (ม.ค.–มี.ค.)' },
+  { k: 'q3', label: 'ไตรมาส 3 (เม.ย.–มิ.ย.)' },
+  { k: 'q4', label: 'ไตรมาส 4 (ก.ค.–ก.ย.)' },
+];
+function currentFYQuarter(): { be: number; q: string } {
+  const d = new Date(); const y = d.getFullYear(), mo = d.getMonth();
+  return { be: (mo >= 9 ? y + 1 : y) + 543, q: mo >= 9 ? 'q1' : mo <= 2 ? 'q2' : mo <= 5 ? 'q3' : 'q4' };
+}
+function periodRange(be: number, q: string): { from: string; to: string } {
+  const s = be - 543 - 1, e = be - 543;
+  const m: Record<string, [string, string]> = {
+    q1: [`${s}-10-01`, `${s}-12-31`], q2: [`${e}-01-01`, `${e}-03-31`],
+    q3: [`${e}-04-01`, `${e}-06-30`], q4: [`${e}-07-01`, `${e}-09-30`], year: [`${s}-10-01`, `${e}-09-30`],
+  };
+  const [from, to] = m[q] || m.year; return { from, to };
+}
+const selStyle: React.CSSProperties = { padding: '8px 11px', border: '1px solid var(--line)', borderRadius: 9, fontSize: 13, fontFamily: 'inherit', background: 'var(--card,#fff)', color: 'inherit' };
 
 const ICON: Record<string, string> = {
   'Social Media': '👍', 'Website / Email / DB': '🌐', 'ทีมรณรงค์ขาย': '🧑‍💼', 'ฝ่ายงานสำนักงานใหญ่': '🏢',
@@ -55,22 +77,50 @@ function Donut({ data, size = 150 }: { data: { label: string; value: number; col
 
 export default function ChannelsView({ rows }: { rows: Voc[] }) {
   const [sel, setSel] = useState<string | null>(null);
+  // ฟิลเตอร์ชุดเดียวกับหน้าภาพรวม
+  const [maxFY, setMaxFY] = useState(2569);
+  const [beYear, setBeYear] = useState(2569);
+  const [quarter, setQuarter] = useState('q3');
+  const [product, setProduct] = useState('all');
+  const [ptype, setPtype] = useState('all');
+  const [projText, setProjText] = useState('');
+  useEffect(() => { const { be, q } = currentFYQuarter(); setMaxFY(be); setBeYear(be); setQuarter(q); }, []);
+  const YEARS = [maxFY, maxFY - 1, maxFY - 2];
+
+  const allTime = beYear === 0;
+  const range = periodRange(beYear, quarter);
+  const projQ = projText.trim().toLowerCase();
+  // รายชื่อโครงการ (cascade ตามประเภท) สำหรับ datalist ค้นหา
+  const projectNames = useMemo(() => {
+    const m = new Map<string, string>();
+    rows.forEach(r => { if (r.project) m.set(r.project, r.projectType); });
+    return Array.from(m, ([name, type]) => ({ name, type }));
+  }, [rows]);
+  const projOptions = ptype === 'all' ? projectNames : projectNames.filter(p => p.type === ptype);
+
+  // ข้อมูลหลังกรอง — ใช้กับทุกส่วนของหน้า
+  const fr = useMemo(() => rows.filter(r =>
+    (allTime || (r.occurredAt >= range.from && r.occurredAt <= range.to)) &&
+    (product === 'all' || r.product === product) &&
+    (ptype === 'all' || r.projectType === ptype) &&
+    (!projQ || (r.project || '').toLowerCase().includes(projQ))
+  ), [rows, allTime, range.from, range.to, product, ptype, projQ]);
 
   const stats = useMemo(() => CHANNELS.map(name => {
-    const r = rows.filter(x => x.channel === name);
+    const r = fr.filter(x => x.channel === name);
     const t = r.length || 1;
     const pos = r.filter(x => x.sentiment === 'Positive').length;
     const neu = r.filter(x => x.sentiment === 'Neutral').length;
     const neg = r.filter(x => x.sentiment === 'Negative').length;
     return { name, count: r.length, pos, neu, neg, posPct: Math.round(pos / t * 100), neuPct: Math.round(neu / t * 100), negPct: Math.round(neg / t * 100) };
-  }), [rows]);
+  }), [fr]);
 
   const total = stats.reduce((a, c) => a + c.count, 0);
   const maxCount = Math.max(...stats.map(c => c.count), 1);
-  const allPos = rows.filter(r => r.sentiment === 'Positive').length;
-  const allNeu = rows.filter(r => r.sentiment === 'Neutral').length;
-  const allNeg = rows.filter(r => r.sentiment === 'Negative').length;
-  const t0 = rows.length || 1;
+  const allPos = fr.filter(r => r.sentiment === 'Positive').length;
+  const allNeu = fr.filter(r => r.sentiment === 'Neutral').length;
+  const allNeg = fr.filter(r => r.sentiment === 'Negative').length;
+  const t0 = fr.length || 1;
   const faces = [
     { kind: 'smile' as const, lab: 'เชิงบวก (Positive)', n: allPos, pct: Math.round(allPos / t0 * 100), color: '#16a34a' },
     { kind: 'flat' as const, lab: 'เป็นกลาง (Neutral)', n: allNeu, pct: Math.round(allNeu / t0 * 100), color: '#f59e0b' },
@@ -82,6 +132,31 @@ export default function ChannelsView({ rows }: { rows: Voc[] }) {
       <header className="top">
         <h1>8 ช่องทางรับฟังเสียงลูกค้า</h1>
         <div className="sub">คลิกการ์ดช่องทางเพื่อดูแดชบอร์ดเฉพาะช่องทาง · รวม {total.toLocaleString()} รายการ</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+          <select style={selStyle} value={beYear} onChange={e => setBeYear(Number(e.target.value))}>
+            <option value={0}>ทั้งหมด (ตั้งแต่มีระบบ)</option>
+            {YEARS.map(y => <option key={y} value={y}>ปีงบประมาณ {y}</option>)}
+          </select>
+          <select style={selStyle} value={quarter} onChange={e => setQuarter(e.target.value)} disabled={allTime}>
+            {QUARTERS.map(q => <option key={q.k} value={q.k}>{q.label}</option>)}
+          </select>
+          <select style={selStyle} value={product} onChange={e => setProduct(e.target.value)}>
+            <option value="all">ทุกกลุ่มผลิตภัณฑ์</option>
+            {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <select style={selStyle} value={ptype} onChange={e => { setPtype(e.target.value); setProjText(''); }}>
+            <option value="all">ทุกประเภทโครงการ</option>
+            {PROJECT_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <div style={{ position: 'relative' }}>
+            <input list="ch-projects" style={{ ...selStyle, width: 210 }} value={projText}
+              onChange={e => setProjText(e.target.value)}
+              placeholder={`🔎 ทุกชื่อโครงการ${ptype !== 'all' ? ` (${projOptions.length})` : ''}`} />
+            <datalist id="ch-projects">{projOptions.map(p => <option key={p.name} value={p.name} />)}</datalist>
+            {projText && <button type="button" onClick={() => setProjText('')} title="ล้าง"
+              style={{ position: 'absolute', right: 6, top: 6, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--muted)' }}>✕</button>}
+          </div>
+        </div>
       </header>
       <div className="content">
         {/* ===== ภาพรวม (แสดงเมื่อยังไม่เลือกช่องทาง) ===== */}
@@ -152,7 +227,7 @@ export default function ChannelsView({ rows }: { rows: Voc[] }) {
         </div>
 
         {/* ===== รายละเอียดเฉพาะช่องทาง (แสดงด้านล่างเมื่อเลือก) ===== */}
-        {sel && <ChannelDetail key={sel} rows={rows.filter(r => r.channel === sel)} name={sel} onBack={() => setSel(null)} />}
+        {sel && <ChannelDetail key={sel} rows={fr.filter(r => r.channel === sel)} name={sel} onBack={() => setSel(null)} />}
       </div>
     </>
   );
