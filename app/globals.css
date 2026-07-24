@@ -31,6 +31,10 @@ input{font-family:inherit;font-size:14px;padding:9px 12px;border:1px solid var(-
 .tag{background:#eef2ff;color:var(--navy);border-radius:6px;padding:2px 8px;font-size:11px}
 .pipe{display:flex;height:16px;border-radius:8px;overflow:hidden;border:1px solid var(--line);margin-bottom:10px}
 .btn{display:inline-block;background:var(--blue);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-family:inherit;font-size:13px;cursor:pointer}
+/* การ์ดช่องทาง — เอฟเฟกต์ hover เคลื่อนไหว */
+.chan-card{transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;cursor:pointer}
+.chan-card:hover{transform:translateY(-5px);box-shadow:0 12px 26px rgba(31,58,147,.18);border-color:var(--blue)}
+.chan-card.sel{outline:2px solid var(--blue);box-shadow:0 8px 22px rgba(46,108,240,.2)}
 
 /* ===== ปุ่มสลับธีมในแถบเมนู ===== */
 .theme-toggle{margin-top:auto;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#dbe4ff;border-radius:9px;padding:9px 12px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
