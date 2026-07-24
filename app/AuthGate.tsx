@@ -2,7 +2,7 @@
 // AuthGate — ล็อกอิน / สมัครใช้งาน / ลืมรหัสผ่าน / ตั้งรหัสใหม่ (Supabase Auth)
 // ดีไซน์หน้าเข้าใช้งาน 2 คอลัมน์ + โลโก้การเคหะแห่งชาติ (SVG)
 import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 
 // หน้าที่เข้าได้โดยไม่ต้องล็อกอิน (ยืนยันอีเมล ฯลฯ)
@@ -24,6 +24,7 @@ function Logo({ size = 60 }: { size?: number }) {
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<{ role: string; full_name: string | null }>({ role: '', full_name: null });
@@ -63,6 +64,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     e.preventDefault(); setErr(''); setMsg(''); setBusy(true);
     const { error } = await supabase!.auth.signInWithPassword({ email, password: pw });
     if (error) setErr('เข้าสู่ระบบไม่สำเร็จ: ' + error.message);
+    else router.push('/dashboard');   // ล็อกอินสำเร็จ → ไปหน้าภาพรวมเสมอ
     setBusy(false);
   }
   async function doSignup(e: React.FormEvent) {
@@ -106,26 +108,27 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     return (
       <div style={{ position: 'fixed', inset: 0, display: 'grid', placeItems: 'center', overflow: 'auto',
         background: 'linear-gradient(135deg,#0f1e46,#16285f 45%,#1f3a93)', fontFamily: 'Sarabun,sans-serif', padding: 20 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', width: '100%', maxWidth: 940, background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 30px 80px rgba(0,0,0,.4)', margin: '24px 0' }}>
+        {/* กราฟิกพื้นหลัง: คลื่นเสียง + วงกระจาย + กล่องข้อความ (จาง ๆ อยู่หลังกล่องล็อกอิน) */}
+        <svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true"
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.08, pointerEvents: 'none' }}>
+          <g fill="none" stroke="#fff" strokeWidth="3">
+            <circle cx="1300" cy="140" r="60" /><circle cx="1300" cy="140" r="110" /><circle cx="1300" cy="140" r="160" /><circle cx="1300" cy="140" r="210" />
+            <circle cx="120" cy="780" r="50" /><circle cx="120" cy="780" r="95" /><circle cx="120" cy="780" r="140" />
+            <rect x="1050" y="640" width="230" height="130" rx="26" /><path d="M1100 770 l0 40 l40 -40" />
+            <rect x="180" y="120" width="180" height="100" rx="22" /><path d="M320 220 l0 30 l-30 -30" />
+          </g>
+          <g fill="#fff">
+            {Array.from({ length: 26 }).map((_, i) => {
+              const h = [40, 90, 150, 70, 200, 120, 240, 100, 60, 170, 210, 80, 130, 190, 55, 160, 230, 95, 140, 65, 185, 110, 45, 205, 150, 75][i];
+              return <rect key={i} x={430 + i * 26} y={450 - h / 2} width="10" height={h} rx="5" />;
+            })}
+          </g>
+        </svg>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexWrap: 'wrap', width: '100%', maxWidth: 940, background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 30px 80px rgba(0,0,0,.4)', margin: '24px 0' }}>
 
           {/* ซ้าย: แผงแบรนด์ */}
-          <div style={{ flex: '1 1 340px', minWidth: 300, position: 'relative', overflow: 'hidden', background: 'linear-gradient(160deg,#1f3a93,#16285f)', color: '#fff', padding: '40px 36px', display: 'flex', flexDirection: 'column' }}>
-            {/* กราฟิกพื้นหลัง: คลื่นเสียง + กล่องข้อความ (จาง ๆ) */}
-            <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice" aria-hidden="true"
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.12, pointerEvents: 'none' }}>
-              <g fill="none" stroke="#fff" strokeWidth="2">
-                <circle cx="330" cy="90" r="30" /><circle cx="330" cy="90" r="52" /><circle cx="330" cy="90" r="74" />
-                <rect x="40" y="360" width="150" height="80" rx="16" /><path d="M70 440 l0 24 l24 -24" />
-                <rect x="230" y="410" width="120" height="64" rx="14" /><path d="M320 474 l0 18 l-18 -18" />
-              </g>
-              <g fill="#fff">
-                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => {
-                  const h = [24, 44, 70, 40, 90, 60, 100, 52, 30, 64][i];
-                  return <rect key={i} x={30 + i * 20} y={230 - h / 2} width="8" height={h} rx="4" />;
-                })}
-              </g>
-            </svg>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ flex: '1 1 340px', minWidth: 300, background: 'linear-gradient(160deg,#1f3a93,#16285f)', color: '#fff', padding: '40px 36px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ background: '#fff', borderRadius: 14, padding: 8, display: 'grid', placeItems: 'center' }}><Logo size={52} /></div>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 18, lineHeight: 1.2 }}>การเคหะแห่งชาติ</div>
