@@ -35,6 +35,9 @@ input{font-family:inherit;font-size:14px;padding:9px 12px;border:1px solid var(-
 .chan-card{transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;cursor:pointer}
 .chan-card:hover{transform:translateY(-5px);box-shadow:0 12px 26px rgba(31,58,147,.18);border-color:var(--blue)}
 .chan-card.sel{outline:2px solid var(--blue);box-shadow:0 8px 22px rgba(46,108,240,.2)}
+.chan-bar{transition:transform .14s ease,opacity .14s ease}
+.chan-bar:hover{transform:translateY(-3px)}
+.chan-bar:hover>div:nth-child(2){box-shadow:0 6px 14px rgba(31,58,147,.25)}
 
 /* ===== ปุ่มสลับธีมในแถบเมนู ===== */
 .theme-toggle{margin-top:auto;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#dbe4ff;border-radius:9px;padding:9px 12px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
