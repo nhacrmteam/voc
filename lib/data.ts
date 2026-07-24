@@ -65,7 +65,7 @@ const MOCK: Voc[] = Array.from({ length: 60 }, (_, i) => {
   return {
     id: String(i + 1), ref: 'VOC-' + (2569000 + i),
     channel: ch,
-    source: ch === 'Social Media' ? (i % 2 ? 'Line OA' : 'Facebook')
+    source: ch === 'Social Media' ? (Math.floor(i / 8) % 2 ? 'Line OA' : 'Facebook')
       : ch === 'Website / Email / DB' ? ['Website', 'Email', 'Data อื่นๆ'][i % 3]
       : ch,
     product: pick(['อาคารเพื่อขาย/เช่าซื้อ', 'อาคารเช่า', 'เช่าจัดประโยชน์'], i),
