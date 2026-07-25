@@ -5,9 +5,9 @@ import type { Voc } from '../../lib/data';
 const SENT_TH: Record<string, string> = { Positive: 'เชิงบวก', Neutral: 'เป็นกลาง', Negative: 'เชิงลบ' };
 const COLS: { key: keyof Voc; label: string }[] = [
   { key: 'ref', label: 'รหัส' }, { key: 'channel', label: 'ช่องทาง' }, { key: 'source', label: 'แหล่ง' },
-  { key: 'project', label: 'โครงการ' }, { key: 'topic', label: 'ประเด็น' }, { key: 'voice', label: 'เสียงลูกค้า' },
-  { key: 'sentiment', label: 'Sentiment' }, { key: 'priority', label: 'ความเร่งด่วน' },
-  { key: 'owner', label: 'ฝ่ายรับผิดชอบ' }, { key: 'status', label: 'สถานะ' }, { key: 'occurredAt', label: 'วันที่เกิดเรื่อง' },
+  { key: 'projectType', label: 'ประเภทโครงการ' }, { key: 'project', label: 'โครงการ' }, { key: 'topic', label: 'ประเด็น' }, { key: 'voice', label: 'เสียงลูกค้า' },
+  { key: 'sentiment', label: 'Sentiment' }, { key: 'priority', label: 'ความรุนแรง' },
+  { key: 'owner', label: 'ฝ่ายที่เกี่ยวข้อง' }, { key: 'occurredAt', label: 'วันที่เกิดเรื่อง' },
 ];
 
 function cell(r: Voc, k: keyof Voc): string {
