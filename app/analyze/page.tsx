@@ -1,5 +1,6 @@
 import { listVOC, sentimentStats } from '../../lib/data';
 import ReviewQueue from './ReviewQueue';
+import ReanalyzePanel from './ReanalyzePanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +47,7 @@ export default async function Analyze() {
     <>
       <header className="top">
         <h1>AI วิเคราะห์เสียงลูกค้า</h1>
-        <div className="sub">AI ตรวจจับ Sentiment และจำแนกประเภทอัตโนมัติ · เจ้าหน้าที่ยืนยัน/แก้ไขได้ (human-in-the-loop)</div>
+        <div className="sub">LLM จริงตรวจจับ Sentiment และจำแนกประเภทอัตโนมัติ (สำรองด้วย rule-based) · เจ้าหน้าที่ยืนยัน/แก้ไขได้ (human-in-the-loop)</div>
       </header>
       <div className="content">
         {/* Sentiment summary */}
@@ -56,6 +57,9 @@ export default async function Analyze() {
           <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: '#64748b' }}>% เป็นกลาง</div><div style={{ fontSize: 26, fontWeight: 700, color: '#64748b' }}>{s.neuPct}%</div></div>
           <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: '#64748b' }}>% เสียงเชิงลบ</div><div style={{ fontSize: 26, fontWeight: 700, color: '#dc2626' }}>{s.negPct}%</div></div>
         </div>
+
+        {/* เครื่องมือวิเคราะห์ที่ใช้จริง + วิเคราะห์ใหม่ด้วย LLM */}
+        <ReanalyzePanel />
 
         {/* คิวยืนยัน — AI ไม่แน่ใจ */}
         <div className="card">
