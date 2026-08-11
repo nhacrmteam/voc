@@ -136,7 +136,17 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     if (error) setErr('ตั้งรหัสใหม่ไม่สำเร็จ: ' + error.message);
     else { setMsg('ตั้งรหัสผ่านใหม่เรียบร้อย เข้าสู่ระบบได้เลย'); setMode('login'); setPw(''); setPw2(''); }
   }
-  async function signOut() { await supabase!.auth.signOut(); }
+  async function signOut() { await supabase!.auth.signOut(); router.replace('/login'); }
+
+  // ทำให้ URL ตรงกับสถานะจริง: ยังไม่ล็อกอิน → /login, ล็อกอินแล้วแต่อยู่ /login → /dashboard
+  useEffect(() => {
+    if (!ready || !supabase) return;
+    if (!session && mode !== 'recovery' && !PUBLIC_PATHS.includes(pathname) && pathname !== '/login') {
+      router.replace('/login');
+    } else if (session && pathname === '/login') {
+      router.replace('/dashboard');
+    }
+  }, [ready, session, mode, pathname]);
 
   if (!ready) return <div style={{ padding: 40, fontFamily: 'Sarabun,sans-serif' }}>กำลังโหลด…</div>;
 
