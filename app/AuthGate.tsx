@@ -18,14 +18,20 @@ const lab: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#33415
 const btn: React.CSSProperties = { width: '100%', padding: 12, background: '#1f3a93', color: '#fff', border: 'none', borderRadius: 9, fontWeight: 700, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' };
 const linkBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#2e6cf0', cursor: 'pointer', fontSize: 12.5, fontFamily: 'inherit', padding: 0, fontWeight: 600 };
 
-// ช่องรหัสผ่านพร้อมปุ่มแสดง/ซ่อน
+// ช่องรหัสผ่านพร้อมปุ่มแสดง/ซ่อน (ไอคอนตา outline มินิมอล)
 function PwInput({ value, onChange, placeholder, minLen }: { value: string; onChange: (e: any) => void; placeholder?: string; minLen?: number }) {
   const [show, setShow] = useState(false);
   return (
     <div style={{ position: 'relative', margin: '4px 0 12px' }}>
       <input style={{ ...inp, margin: 0, paddingRight: 42 }} type={show ? 'text' : 'password'} value={value} onChange={onChange} required minLength={minLen ?? 6} placeholder={placeholder} />
       <button type="button" onClick={() => setShow(s => !s)} aria-label={show ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
-        style={{ position: 'absolute', right: 8, top: 8, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 16 }}>{show ? '🙈' : '👁️'}</button>
+        style={{ position: 'absolute', right: 6, top: 0, bottom: 0, display: 'flex', alignItems: 'center', border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: '0 6px' }}>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+          <circle cx="12" cy="12" r="3" />
+          {show && <line x1="3" y1="3" x2="21" y2="21" />}
+        </svg>
+      </button>
     </div>
   );
 }
