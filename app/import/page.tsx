@@ -48,6 +48,8 @@ function parseCSV(text: string): string[][] {
 interface Parsed { occurred: string; topic: string; text: string; source: string; product: string; journey: string; err: string }
 
 const inp: React.CSSProperties = { padding: '9px 11px', border: '1px solid #dfe6f0', borderRadius: 8, fontSize: 13.5, fontFamily: 'inherit', background: '#fff' };
+const cellInp: React.CSSProperties = { padding: '5px 7px', border: '1px solid var(--line)', borderRadius: 6, fontSize: 12.5, fontFamily: 'inherit', background: 'var(--card,#fff)', color: 'inherit' };
+interface UploadLog { id: string; file_name: string | null; channel_id: string; total: number; ok_count: number; created_at: string; profiles?: { full_name: string | null } | { full_name: string | null }[] }
 
 export default function ImportPage() {
   const [role, setRole] = useState<string | null>(null);
@@ -61,7 +63,16 @@ export default function ImportPage() {
   const [useLLM, setUseLLM] = useState(false);
   const [prog, setProg] = useState('');
   const [method, setMethod] = useState<'file' | 'api' | 'forms' | 'db'>('file');
+  const [history, setHistory] = useState<UploadLog[]>([]);
   const fnBase = (process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://<โปรเจกต์>.supabase.co') + '/functions/v1/ingest-voc';
+
+  async function loadHistory() {
+    if (!supabase) return;
+    const { data } = await supabase.from('upload_log')
+      .select('id, file_name, channel_id, total, ok_count, created_at, profiles(full_name)')
+      .order('created_at', { ascending: false }).limit(20);
+    if (data) setHistory(data as UploadLog[]);
+  }
 
   const ch = CH.find(c => c.id === chId)!;
 
@@ -71,6 +82,7 @@ export default function ImportPage() {
       if (!data.user) { setRole('none'); return; }
       const { data: p } = await supabase!.from('profiles').select('role').eq('id', data.user.id).single();
       setRole(p?.role ?? 'operator');
+      loadHistory();
     });
   }, []);
 
@@ -123,20 +135,40 @@ export default function ImportPage() {
       const iDate = ix('วันที่'), iTopic = ix('หัวข้อ'), iText = ix('ข้อความ'), iSrc = ix('แหล่ง'), iProd = ix('ผลิตภัณฑ์'), iJr = ix('Journey');
       if (iDate < 0 || iText < 0) { setErr('ไม่พบคอลัมน์ "วันที่เกิดเรื่อง" หรือ "ข้อความเสียงลูกค้า" — ใช้เทมเพลตที่ดาวน์โหลดจากหน้านี้'); return; }
       const out: Parsed[] = grid.slice(1).map(r => {
-        const occurred = (r[iDate] || '').trim();
-        const text = (r[iText] || '').trim();
-        const product = iProd >= 0 ? (r[iProd] || '').trim() : '';
-        const journey = iJr >= 0 ? (r[iJr] || '').trim() : '';
-        let e = '';
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(occurred)) e = 'วันที่ต้องเป็น YYYY-MM-DD';
-        else if (!text) e = 'ไม่มีข้อความเสียงลูกค้า';
-        else if (product && !PRODUCTS.includes(product)) e = 'กลุ่มผลิตภัณฑ์ไม่ตรง (ปล่อยว่างได้)';
-        else if (journey && !JOURNEYS.includes(journey)) e = 'Journey ไม่ตรง (ปล่อยว่างได้)';
-        return { occurred, topic: iTopic >= 0 ? (r[iTopic] || '').trim() : '', text, source: iSrc >= 0 ? (r[iSrc] || '').trim() : '', product, journey, err: e };
+        const p: Parsed = {
+          occurred: (r[iDate] || '').trim(),
+          topic: iTopic >= 0 ? (r[iTopic] || '').trim() : '',
+          text: (r[iText] || '').trim(),
+          source: iSrc >= 0 ? (r[iSrc] || '').trim() : '',
+          product: iProd >= 0 ? (r[iProd] || '').trim() : '',
+          journey: iJr >= 0 ? (r[iJr] || '').trim() : '',
+          err: '',
+        };
+        p.err = validateRow(p);
+        return p;
       });
       setRows(out);
     }
   }
+
+  // ตรวจสอบความถูกต้องต่อแถว (ใช้ทั้งตอนอ่านไฟล์และตอนแก้ไข)
+  function validateRow(p: Parsed): string {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(p.occurred)) return 'วันที่ต้องเป็น YYYY-MM-DD';
+    if (!p.text.trim()) return 'ไม่มีข้อความเสียงลูกค้า';
+    if (p.product && !PRODUCTS.includes(p.product)) return 'กลุ่มผลิตภัณฑ์ไม่ตรง (ปล่อยว่างได้)';
+    if (p.journey && !JOURNEYS.includes(p.journey)) return 'Journey ไม่ตรง (ปล่อยว่างได้)';
+    return '';
+  }
+  // แก้ไขค่าในแถว → ตรวจสอบใหม่ทันที
+  function editRow(i: number, key: keyof Parsed, value: string) {
+    setRows(rs => rs.map((r, idx) => {
+      if (idx !== i) return r;
+      const nr = { ...r, [key]: value };
+      nr.err = validateRow(nr);
+      return nr;
+    }));
+  }
+  function delRow(i: number) { setRows(rs => rs.filter((_, idx) => idx !== i)); }
 
   const ok = rows.filter(r => !r.err);
   const bad = rows.filter(r => r.err);
@@ -197,6 +229,14 @@ export default function ImportPage() {
           if (e2) throw e2;
         }
       }
+      // บันทึกประวัติการอัปโหลด (ไม่ให้ error ตรงนี้ทำให้การนำเข้าล้ม)
+      try {
+        await supabase.from('upload_log').insert({
+          uploaded_by: u.user?.id ?? null, channel_id: chId, source, file_name: fileName || null,
+          total: rows.length, ok_count: ok.length, method: 'file',
+        });
+        loadHistory();
+      } catch { /* ตาราง upload_log อาจยังไม่ถูกสร้าง — ข้าม */ }
       setMsg('นำเข้าสำเร็จ ' + ok.length + ' รายการ เข้าช่องทาง "' + ch.name + '"' +
         (useLLM ? (llmCount === ok.length ? ' · วิเคราะห์ด้วย LLM ทั้งหมด' : ' · LLM ' + llmCount + ' แถว, rule-based ' + (ok.length - llmCount) + ' แถว (LLM ใช้ไม่ได้บางส่วน)') : '') +
         ' — ดูได้ในเมนูรายการ VOC');
@@ -263,19 +303,25 @@ export default function ImportPage() {
         {/* ขั้น 3: พรีวิว + บันทึก */}
         {rows.length > 0 && (
           <div className="card">
-            <h3>3️⃣ ตรวจสอบก่อนบันทึก — ผ่าน <b style={{ color: 'var(--green)' }}>{ok.length}</b> / มีปัญหา <b style={{ color: 'var(--red)' }}>{bad.length}</b></h3>
-            <table style={{ marginTop: 8 }}>
-              <thead><tr><th>#</th><th>วันที่เกิดเรื่อง</th><th>หัวข้อ</th><th>ข้อความ</th><th>แหล่ง</th><th>ผลตรวจ</th></tr></thead>
-              <tbody>{rows.slice(0, 10).map((r, i) => (
-                <tr key={i} style={r.err ? { background: '#fef2f2' } : undefined}>
-                  <td>{i + 1}</td><td>{r.occurred}</td><td>{r.topic}</td>
-                  <td style={{ maxWidth: 280, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.text}>{r.text}</td>
-                  <td>{r.source || source}</td>
-                  <td>{r.err ? <span style={{ color: 'var(--red)', fontSize: 12 }}>✗ {r.err}</span> : <span style={{ color: 'var(--green)', fontSize: 12 }}>✓ พร้อมนำเข้า</span>}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-            {rows.length > 10 && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>แสดง 10 จาก {rows.length} แถว</div>}
+            <h3>3️⃣ ตรวจสอบ/แก้ไขก่อนบันทึก — ผ่าน <b style={{ color: 'var(--green)' }}>{ok.length}</b> / มีปัญหา <b style={{ color: 'var(--red)' }}>{bad.length}</b></h3>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>แก้ไขในช่องได้เลย (ตรวจสอบใหม่ทันที) · แถวที่มีปัญหาเป็นพื้นแดง · กด 🗑️ เพื่อลบแถว</div>
+            <div style={{ maxHeight: 440, overflow: 'auto', border: '1px solid var(--line)', borderRadius: 10 }}>
+              <table style={{ fontSize: 12.5 }}>
+                <thead><tr><th style={{ width: 34 }}>#</th><th>วันที่เกิดเรื่อง</th><th>หัวข้อ</th><th>ข้อความเสียงลูกค้า</th><th>แหล่ง</th><th>ผลตรวจ</th><th></th></tr></thead>
+                <tbody>{rows.map((r, i) => (
+                  <tr key={i} style={r.err ? { background: '#fef2f2' } : undefined}>
+                    <td>{i + 1}</td>
+                    <td><input value={r.occurred} onChange={e => editRow(i, 'occurred', e.target.value)} style={{ ...cellInp, width: 108 }} placeholder="YYYY-MM-DD" /></td>
+                    <td><input value={r.topic} onChange={e => editRow(i, 'topic', e.target.value)} style={{ ...cellInp, width: 130 }} /></td>
+                    <td><input value={r.text} onChange={e => editRow(i, 'text', e.target.value)} style={{ ...cellInp, width: 280 }} /></td>
+                    <td><input value={r.source} onChange={e => editRow(i, 'source', e.target.value)} style={{ ...cellInp, width: 100 }} placeholder={source} /></td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{r.err ? <span style={{ color: 'var(--red)', fontSize: 11.5 }}>✗ {r.err}</span> : <span style={{ color: 'var(--green)', fontSize: 11.5 }}>✓ พร้อม</span>}</td>
+                    <td><button type="button" onClick={() => delRow(i)} title="ลบแถวนี้" style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 15 }}>🗑️</button></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>ทั้งหมด {rows.length} แถว · จะบันทึกเฉพาะแถวที่ผ่าน ({ok.length})</div>
             <div style={{ marginTop: 12 }}>
               {role === 'mock'
                 ? <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>* โหมดข้อมูลจำลอง — ปุ่มบันทึกจะใช้ได้เมื่อเชื่อม Supabase</div>
@@ -295,6 +341,31 @@ export default function ImportPage() {
         )}
         {msg && <div className="card" style={{ color: '#15803d' }}>✓ {msg}</div>}
         {err && <div className="card" style={{ color: '#b91c1c' }}>{err}</div>}
+
+        {/* ประวัติการอัปโหลด */}
+        <div className="card">
+          <h3>🕒 ประวัติการอัปโหลด (ล่าสุด 20 ครั้ง)</h3>
+          {history.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--muted)' }}>ยังไม่มีประวัติ — เมื่อบันทึกการนำเข้าสำเร็จจะแสดงที่นี่ (ต้องรัน supabase_upload_log.sql ก่อน)</div>
+          ) : (
+            <table>
+              <thead><tr><th>วันเวลา</th><th>ช่องทาง</th><th>ไฟล์</th><th>ทั้งหมด</th><th>นำเข้าสำเร็จ</th><th>โดย</th></tr></thead>
+              <tbody>{history.map(h => {
+                const prof = Array.isArray(h.profiles) ? h.profiles[0] : h.profiles;
+                return (
+                  <tr key={h.id}>
+                    <td style={{ whiteSpace: 'nowrap' }}>{(h.created_at || '').slice(0, 16).replace('T', ' ')}</td>
+                    <td>{CH.find(c => c.id === h.channel_id)?.name || h.channel_id}</td>
+                    <td>{h.file_name || '-'}</td>
+                    <td>{h.total}</td>
+                    <td style={{ color: 'var(--green)', fontWeight: 600 }}>{h.ok_count}</td>
+                    <td>{prof?.full_name || '-'}</td>
+                  </tr>
+                );
+              })}</tbody>
+            </table>
+          )}
+        </div>
         </>}
 
         {/* Google Forms / ฟอร์มออนไลน์ */}
