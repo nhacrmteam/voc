@@ -4,9 +4,12 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
+import { DEPT_GROUPS } from '../lib/data';
 
 // หน้าที่เข้าได้โดยไม่ต้องล็อกอิน (ยืนยันอีเมล ฯลฯ)
 const PUBLIC_PATHS = ['/welcome'];
+// บทบาทที่ผู้สมัครขอใช้งาน (จริง ๆ จะได้สิทธิ์เมื่อแอดมินอนุมัติ)
+const SIGNUP_ROLES = [{ v: 'operator', l: 'ผู้ปฏิบัติงาน' }, { v: 'admin', l: 'แอดมิน' }, { v: 'executive', l: 'ผู้บริหาร' }];
 
 const ROLE_TH: Record<string, string> = { admin: 'แอดมิน', operator: 'ผู้ปฏิบัติงาน', executive: 'ผู้บริหาร', pending: 'รออนุมัติ' };
 
@@ -36,7 +39,8 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [profileReady, setProfileReady] = useState(false);
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
-  const [f, setF] = useState({ full_name: '', emp_code: '', phone: '', dept: '', position: '' });
+  const [pw2, setPw2] = useState('');   // ยืนยันรหัสผ่าน (ตอนตั้งรหัสใหม่)
+  const [f, setF] = useState({ full_name: '', emp_code: '', phone: '', dept: '', position: '', role: 'operator' });
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
 
   useEffect(() => {
@@ -68,12 +72,15 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     setBusy(false);
   }
   async function doSignup(e: React.FormEvent) {
-    e.preventDefault(); setErr(''); setMsg(''); setBusy(true);
+    e.preventDefault(); setErr(''); setMsg('');
+    // แอดมิน/ผู้ปฏิบัติงาน ต้องเลือกฝ่าย · ผู้บริหารไม่ต้อง
+    if (f.role !== 'executive' && !f.dept) { setErr('กรุณาเลือกฝ่าย/หน่วยงาน สำหรับบทบาทแอดมิน/ผู้ปฏิบัติงาน'); return; }
+    setBusy(true);
     const { data, error } = await supabase!.auth.signUp({
       email, password: pw,
-      // ไม่ส่ง role — บทบาทถูกกำหนดเป็น "รออนุมัติ" ที่ฝั่งฐานข้อมูลเสมอ (ความปลอดภัย)
+      // เก็บ "บทบาทที่ขอ" + ฝ่าย ไว้ให้แอดมินพิจารณา — บทบาทจริงถูกตั้งเป็น "รออนุมัติ" เสมอ (ความปลอดภัย)
       options: {
-        data: { full_name: f.full_name, emp_code: f.emp_code, phone: f.phone, dept: f.dept, position: f.position },
+        data: { full_name: f.full_name, emp_code: f.emp_code, phone: f.phone, dept: f.role === 'executive' ? 'ผู้บริหาร' : f.dept, position: f.position, requested_role: f.role },
         emailRedirectTo: window.location.origin + '/welcome',   // คลิกลิงก์ยืนยันแล้วไปหน้า "ยืนยันอีเมลเรียบร้อย"
       },
     });
@@ -84,17 +91,21 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   }
   async function doForgot(e: React.FormEvent) {
     e.preventDefault(); setErr(''); setMsg(''); setBusy(true);
-    const { error } = await supabase!.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+    // ส่งลิงก์รีเซ็ตไปอีเมล — ลิงก์นี้คือการยืนยันตัวตน (เฉพาะเจ้าของอีเมลเปิดได้ · ใช้ครั้งเดียว · มีวันหมดอายุ)
+    const { error } = await supabase!.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/dashboard' });
     setBusy(false);
     if (error) setErr('ส่งอีเมลไม่สำเร็จ: ' + error.message);
-    else setMsg('ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมลแล้ว — กรุณาตรวจกล่องอีเมล');
+    else setMsg('ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ ' + email + ' แล้ว — กรุณาเปิดอีเมลแล้วคลิกลิงก์ (ตรวจกล่อง Spam ด้วย)');
   }
   async function doRecovery(e: React.FormEvent) {
-    e.preventDefault(); setErr(''); setMsg(''); setBusy(true);
+    e.preventDefault(); setErr(''); setMsg('');
+    if (pw.length < 6) { setErr('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'); return; }
+    if (pw !== pw2) { setErr('รหัสผ่านทั้งสองช่องไม่ตรงกัน'); return; }
+    setBusy(true);
     const { error } = await supabase!.auth.updateUser({ password: pw });
     setBusy(false);
     if (error) setErr('ตั้งรหัสใหม่ไม่สำเร็จ: ' + error.message);
-    else { setMsg('ตั้งรหัสผ่านใหม่เรียบร้อย เข้าสู่ระบบได้เลย'); setMode('login'); }
+    else { setMsg('ตั้งรหัสผ่านใหม่เรียบร้อย เข้าสู่ระบบได้เลย'); setMode('login'); setPw(''); setPw2(''); }
   }
   async function signOut() { await supabase!.auth.signOut(); }
 
@@ -178,11 +189,27 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
                   <div><label style={lab}>ชื่อ-สกุล *</label><input style={inp} value={f.full_name} onChange={set('full_name')} required /></div>
                   <div><label style={lab}>รหัสพนักงาน *</label><input style={inp} value={f.emp_code} onChange={set('emp_code')} required /></div>
                   <div><label style={lab}>เบอร์โทร</label><input style={inp} value={f.phone} onChange={set('phone')} /></div>
-                  <div><label style={lab}>หน่วยงาน/ฝ่าย</label><input style={inp} value={f.dept} onChange={set('dept')} /></div>
+                  <div><label style={lab}>ตำแหน่ง</label><input style={inp} value={f.position} onChange={set('position')} /></div>
                 </div>
-                <label style={lab}>ตำแหน่ง</label><input style={inp} value={f.position} onChange={set('position')} />
+                <label style={lab}>บทบาทที่ขอใช้งาน *</label>
+                <select style={inp} value={f.role} onChange={set('role')}>
+                  {SIGNUP_ROLES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}
+                </select>
+                {f.role !== 'executive' && (
+                  <>
+                    <label style={lab}>ฝ่าย/หน่วยงาน *</label>
+                    <select style={inp} value={f.dept} onChange={set('dept')} required>
+                      <option value="">— เลือกฝ่าย —</option>
+                      {DEPT_GROUPS.map(g => (
+                        <optgroup key={g.group} label={g.group}>
+                          {g.depts.map(d => <option key={d} value={d}>{d}</option>)}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </>
+                )}
                 <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', fontSize: 12, padding: '8px 11px', borderRadius: 8, margin: '2px 0 12px' }}>
-                  ℹ️ หลังสมัคร แอดมินจะเป็นผู้กำหนดบทบาท (แอดมิน/ผู้ปฏิบัติงาน/ผู้บริหาร) ให้ก่อนจึงเข้าใช้งานได้
+                  ℹ️ บทบาทที่เลือกเป็นเพียง &ldquo;คำขอ&rdquo; — แอดมินจะอนุมัติบทบาทจริงให้ก่อนเข้าใช้งาน
                 </div>
                 <label style={lab}>อีเมลพนักงาน *</label>
                 <input style={inp} value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="you@nha.co.th" />
@@ -197,9 +224,12 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
 
             {mode === 'forgot' && (
               <form onSubmit={doForgot}>
+                <div style={{ fontSize: 12.5, color: '#475569', marginBottom: 12, lineHeight: 1.7 }}>
+                  กรอกอีเมลที่ลงทะเบียนไว้ ระบบจะส่ง<b>ลิงก์ยืนยันตัวตน</b>ไปที่อีเมล เพื่อกลับมาตั้งรหัสผ่านใหม่อย่างปลอดภัย (ลิงก์ใช้ได้ครั้งเดียวและมีวันหมดอายุ)
+                </div>
                 <label style={lab}>อีเมลที่ลงทะเบียนไว้</label>
                 <input style={inp} value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="you@nha.co.th" />
-                <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังส่ง…' : 'ส่งลิงก์ตั้งรหัสใหม่'}</button>
+                <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังส่ง…' : '📧 ส่งลิงก์ตั้งรหัสผ่านใหม่'}</button>
                 <div style={{ marginTop: 13, textAlign: 'center' }}>
                   <button type="button" style={linkBtn} onClick={() => { setMode('login'); setErr(''); setMsg(''); }}>← กลับไปหน้าเข้าสู่ระบบ</button>
                 </div>
@@ -208,8 +238,13 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
 
             {mode === 'recovery' && (
               <form onSubmit={doRecovery}>
+                <div style={{ fontSize: 12.5, color: '#15803d', background: '#dcfce7', borderRadius: 8, padding: '8px 11px', marginBottom: 12 }}>
+                  ✓ ยืนยันตัวตนผ่านลิงก์อีเมลเรียบร้อย — ตั้งรหัสผ่านใหม่ของคุณได้เลย
+                </div>
                 <label style={lab}>รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)</label>
                 <input style={inp} value={pw} onChange={e => setPw(e.target.value)} type="password" required minLength={6} />
+                <label style={lab}>ยืนยันรหัสผ่านใหม่อีกครั้ง</label>
+                <input style={inp} value={pw2} onChange={e => setPw2(e.target.value)} type="password" required minLength={6} />
                 <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังบันทึก…' : 'บันทึกรหัสผ่านใหม่'}</button>
               </form>
             )}
