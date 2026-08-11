@@ -18,6 +18,18 @@ const lab: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#33415
 const btn: React.CSSProperties = { width: '100%', padding: 12, background: '#1f3a93', color: '#fff', border: 'none', borderRadius: 9, fontWeight: 700, fontSize: 14.5, cursor: 'pointer', fontFamily: 'inherit' };
 const linkBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#2e6cf0', cursor: 'pointer', fontSize: 12.5, fontFamily: 'inherit', padding: 0, fontWeight: 600 };
 
+// ช่องรหัสผ่านพร้อมปุ่มแสดง/ซ่อน
+function PwInput({ value, onChange, placeholder, minLen }: { value: string; onChange: (e: any) => void; placeholder?: string; minLen?: number }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div style={{ position: 'relative', margin: '4px 0 12px' }}>
+      <input style={{ ...inp, margin: 0, paddingRight: 42 }} type={show ? 'text' : 'password'} value={value} onChange={onChange} required minLength={minLen ?? 6} placeholder={placeholder} />
+      <button type="button" onClick={() => setShow(s => !s)} aria-label={show ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
+        style={{ position: 'absolute', right: 8, top: 8, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 16 }}>{show ? '🙈' : '👁️'}</button>
+    </div>
+  );
+}
+
 const NHA_LOGO = 'https://upload.wikimedia.org/wikipedia/commons/0/0a/Emblem_of_the_National_Housing_Authority_of_Thailand.svg';
 function Logo({ size = 60 }: { size?: number }) {
   // โลโก้จริงของการเคหะแห่งชาติ (จาก Wikimedia Commons)
@@ -66,9 +78,20 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   }
   async function doLogin(e: React.FormEvent) {
     e.preventDefault(); setErr(''); setMsg(''); setBusy(true);
-    const { error } = await supabase!.auth.signInWithPassword({ email, password: pw });
-    if (error) setErr('เข้าสู่ระบบไม่สำเร็จ: ' + error.message);
-    else router.push('/dashboard');   // ล็อกอินสำเร็จ → ไปหน้าภาพรวมเสมอ
+    let loginEmail = email.trim();
+    let known = false;   // รู้ว่าบัญชีมีจริง → ถ้า sign in พลาด = รหัสผ่านผิด
+    try {
+      // แปลง "อีเมล หรือ รหัสพนักงาน" → อีเมลจริง (ผ่านฟังก์ชัน email_for_login)
+      const { data, error: rpcErr } = await supabase!.rpc('email_for_login', { identifier: loginEmail });
+      if (!rpcErr) {
+        if (data) { loginEmail = data as string; known = true; }
+        else { setErr('ไม่พบบัญชีนี้ในระบบ — ตรวจสอบอีเมลหรือรหัสพนักงานอีกครั้ง'); setBusy(false); return; }
+      }
+    } catch { /* ฟังก์ชันยังไม่ถูกสร้าง → ใช้ค่าที่กรอก (ต้องเป็นอีเมล) */ }
+    const { error } = await supabase!.auth.signInWithPassword({ email: loginEmail, password: pw });
+    if (error) {
+      setErr(known ? '🔑 รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่' : 'เข้าสู่ระบบไม่สำเร็จ — อีเมล/รหัสพนักงาน หรือรหัสผ่านไม่ถูกต้อง');
+    } else router.push('/dashboard');   // ล็อกอินสำเร็จ → ไปหน้าภาพรวมเสมอ
     setBusy(false);
   }
   async function doSignup(e: React.FormEvent) {
@@ -171,10 +194,10 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
 
             {mode === 'login' && (
               <form onSubmit={doLogin}>
-                <label style={lab}>อีเมล</label>
-                <input style={inp} value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="you@nha.co.th" />
+                <label style={lab}>อีเมล หรือ รหัสพนักงาน</label>
+                <input style={inp} value={email} onChange={e => setEmail(e.target.value)} type="text" required placeholder="you@nha.co.th หรือ รหัสพนักงาน" />
                 <label style={lab}>รหัสผ่าน</label>
-                <input style={inp} value={pw} onChange={e => setPw(e.target.value)} type="password" required placeholder="••••••••" />
+                <PwInput value={pw} onChange={e => setPw(e.target.value)} placeholder="••••••••" minLen={1} />
                 <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ'}</button>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 15 }}>
                   <button type="button" style={linkBtn} onClick={() => { setMode('forgot'); setErr(''); setMsg(''); }}>ลืมรหัสผ่าน?</button>
@@ -214,7 +237,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
                 <label style={lab}>อีเมลพนักงาน *</label>
                 <input style={inp} value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="you@nha.co.th" />
                 <label style={lab}>รหัสผ่าน * (อย่างน้อย 6 ตัว)</label>
-                <input style={inp} value={pw} onChange={e => setPw(e.target.value)} type="password" required minLength={6} />
+                <PwInput value={pw} onChange={e => setPw(e.target.value)} placeholder="••••••••" minLen={6} />
                 <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังสมัคร…' : 'สมัครใช้งาน'}</button>
                 <div style={{ marginTop: 13, textAlign: 'center' }}>
                   <button type="button" style={linkBtn} onClick={() => { setMode('login'); setErr(''); setMsg(''); }}>← กลับไปหน้าเข้าสู่ระบบ</button>
@@ -242,9 +265,9 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
                   ✓ ยืนยันตัวตนผ่านลิงก์อีเมลเรียบร้อย — ตั้งรหัสผ่านใหม่ของคุณได้เลย
                 </div>
                 <label style={lab}>รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)</label>
-                <input style={inp} value={pw} onChange={e => setPw(e.target.value)} type="password" required minLength={6} />
+                <PwInput value={pw} onChange={e => setPw(e.target.value)} placeholder="••••••••" minLen={6} />
                 <label style={lab}>ยืนยันรหัสผ่านใหม่อีกครั้ง</label>
-                <input style={inp} value={pw2} onChange={e => setPw2(e.target.value)} type="password" required minLength={6} />
+                <PwInput value={pw2} onChange={e => setPw2(e.target.value)} placeholder="••••••••" minLen={6} />
                 <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังบันทึก…' : 'บันทึกรหัสผ่านใหม่'}</button>
               </form>
             )}
