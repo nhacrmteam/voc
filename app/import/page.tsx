@@ -2,6 +2,7 @@
 // นำเข้าข้อมูล — อัปโหลดไฟล์ CSV เข้าตาราง voc_record (แอดมิน/ผู้ปฏิบัติงาน)
 // หลักการ: แยก "วันที่เกิดเรื่อง (ต้นทาง)" ที่มากับไฟล์ ออกจาก "วันที่นำเข้าระบบ" (บันทึกอัตโนมัติ = วันนี้)
 // Excel: ให้บันทึกเป็น CSV (UTF-8) ก่อนอัปโหลด — เทมเพลตดาวน์โหลดได้ในหน้านี้
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { analyzeText, analyzeSmart, AiResult } from '../../lib/ai';
@@ -59,6 +60,8 @@ export default function ImportPage() {
   const [err, setErr] = useState('');
   const [useLLM, setUseLLM] = useState(false);
   const [prog, setProg] = useState('');
+  const [method, setMethod] = useState<'file' | 'api' | 'forms' | 'db'>('file');
+  const fnBase = (process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://<โปรเจกต์>.supabase.co') + '/functions/v1/ingest-voc';
 
   const ch = CH.find(c => c.id === chId)!;
 
@@ -209,12 +212,29 @@ export default function ImportPage() {
 
   return (
     <>
-      <header className="top"><h1>นำเข้าข้อมูล (อัปโหลดไฟล์)</h1><div className="sub">CSV → ตรวจสอบ → บันทึกเข้าระบบ · เรียลไทม์เฉพาะ Social (ผ่าน API)</div></header>
+      <header className="top"><h1>นำเข้า & เชื่อมต่อข้อมูลเสียงลูกค้า</h1><div className="sub">รับข้อมูลได้หลายรูปแบบ — อัปโหลดไฟล์ · Google Forms/ฟอร์มออนไลน์ · ฐานข้อมูล/ระบบภายใน · API เรียลไทม์</div></header>
       <div className="content">
         {blocked ? (
           <div className="card">🔒 เมนูนำเข้าข้อมูลสำหรับบทบาทแอดมินเท่านั้น</div>
         ) : (
         <>
+        {/* เลือกรูปแบบการนำเข้า */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12, marginBottom: 16 }}>
+          {([
+            ['file', '📤', 'อัปโหลดไฟล์', 'CSV / Excel'],
+            ['forms', '📝', 'Google Forms / ฟอร์มออนไลน์', 'Forms · Microsoft Forms ฯลฯ'],
+            ['db', '🗄️', 'ฐานข้อมูล / ระบบภายใน', 'เชื่อมระบบองค์กร'],
+            ['api', '🔌', 'API / Webhook (เรียลไทม์)', 'LINE OA · Facebook · อื่น ๆ'],
+          ] as const).map(([k, ic, name, desc]) => (
+            <div key={k} className="card chan-card" style={{ marginBottom: 0, borderColor: method === k ? 'var(--blue)' : 'var(--line)', outline: method === k ? '2px solid var(--blue)' : 'none' }} onClick={() => setMethod(k)}>
+              <div style={{ fontSize: 22 }}>{ic}</div>
+              <div style={{ fontWeight: 700, fontSize: 14, marginTop: 4 }}>{name}</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{desc}</div>
+            </div>
+          ))}
+        </div>
+
+        {method === 'file' && <>
         {/* ขั้น 1: เลือกช่องทาง */}
         <div className="card">
           <h3>1️⃣ เลือกช่องทางที่มาของข้อมูล</h3>
@@ -275,6 +295,65 @@ export default function ImportPage() {
         )}
         {msg && <div className="card" style={{ color: '#15803d' }}>✓ {msg}</div>}
         {err && <div className="card" style={{ color: '#b91c1c' }}>{err}</div>}
+        </>}
+
+        {/* Google Forms / ฟอร์มออนไลน์ */}
+        {method === 'forms' && (
+          <div className="card">
+            <h3>📝 Google Forms / ฟอร์มออนไลน์</h3>
+            <p style={{ fontSize: 13.5, lineHeight: 1.8, color: 'var(--ink)' }}>
+              เชื่อมแบบสอบถามออนไลน์ให้ส่งทุกคำตอบใหม่เข้าระบบอัตโนมัติ (เรียลไทม์) เหมาะกับช่องทาง &ldquo;แบบประเมินความพึงพอใจ&rdquo;
+            </p>
+            <ol style={{ fontSize: 13, lineHeight: 2, paddingLeft: 20 }}>
+              <li><b>Google Forms:</b> เปิดฟอร์ม → Apps Script → วางสคริปต์ onFormSubmit ที่ยิงมาที่ endpoint ด้านล่าง (มีตัวอย่างในคู่มือ)</li>
+              <li><b>Microsoft Forms / Typeform / Jotform:</b> ใช้ Power Automate / Zapier / Make เชื่อม &ldquo;New response&rdquo; → HTTP POST มาที่ endpoint</li>
+              <li>ตั้งค่า secret ของช่องทาง <code>survey</code> ที่เมนู <b>จัดการระบบ → ตั้งค่า API</b></li>
+            </ol>
+            <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 4 }}>Endpoint กลาง:</div>
+            <code style={{ display: 'block', background: 'var(--hover,#f1f5f9)', borderRadius: 8, padding: '8px 10px', fontSize: 12, wordBreak: 'break-all', marginBottom: 10 }}>{fnBase}</code>
+            <Link className="btn" href="/admin">ไปตั้งค่า API ช่องทาง →</Link>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>* ดูสคริปต์และวิธีเชื่อมทีละขั้นในไฟล์ <b>เชื่อมต่อ_API_ช่องทาง.md</b> · หรือส่งออกคำตอบเป็นไฟล์แล้วใช้แท็บ &ldquo;อัปโหลดไฟล์&rdquo; ก็ได้</div>
+          </div>
+        )}
+
+        {/* ฐานข้อมูล / ระบบภายใน */}
+        {method === 'db' && (
+          <div className="card">
+            <h3>🗄️ เชื่อมฐานข้อมูล / ระบบภายในองค์กร</h3>
+            <p style={{ fontSize: 13.5, lineHeight: 1.8 }}>
+              ระบบภายใน (Call Center, ระบบร้องเรียน, ฐานข้อมูลลูกค้า ฯลฯ) ให้ทีม IT ส่งข้อมูลเข้าระบบได้ 2 แบบ:
+            </p>
+            <ol style={{ fontSize: 13, lineHeight: 2, paddingLeft: 20 }}>
+              <li><b>ยิง API เป็นรอบ/เรียลไทม์:</b> ให้ระบบต้นทางส่ง <code>POST</code> มาที่ endpoint พร้อม header <code>x-voc-secret</code> ของช่องทางนั้น</li>
+              <li><b>ส่งออกไฟล์เป็นงวด:</b> export เป็น CSV/Excel แล้วนำเข้าที่แท็บ &ldquo;อัปโหลดไฟล์&rdquo; (เหมาะกับข้อมูลย้อนหลัง)</li>
+            </ol>
+            <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 4 }}>รูปแบบข้อมูลที่ส่ง (JSON):</div>
+            <code style={{ display: 'block', background: 'var(--hover,#f1f5f9)', borderRadius: 8, padding: '8px 10px', fontSize: 12, whiteSpace: 'pre-wrap', marginBottom: 10 }}>{`POST ${fnBase}
+Header: x-voc-secret: <secret ของช่องทาง>
+Body: { "channel_id": "call", "text": "ข้อความลูกค้า",
+        "source": "Call Center 1615", "occurred_at": "2026-07-20" }`}</code>
+            <Link className="btn" href="/admin">ไปตั้งค่า API ช่องทาง →</Link>
+          </div>
+        )}
+
+        {/* API / Webhook เรียลไทม์ */}
+        {method === 'api' && (
+          <div className="card">
+            <h3>🔌 API / Webhook (รับข้อมูลเรียลไทม์)</h3>
+            <p style={{ fontSize: 13.5, lineHeight: 1.8 }}>
+              รับเสียงลูกค้าทันทีที่เกิดขึ้น จากช่องทางที่มี API เช่น <b>LINE OA</b> (ส่ง webhook มาตรงได้เลย), <b>Facebook</b>, อีเมล หรือระบบอื่น ๆ
+            </p>
+            <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 4 }}>Endpoint กลาง (ทุกช่องทางใช้ URL เดียวกัน แยกด้วย channel_id + secret):</div>
+            <code style={{ display: 'block', background: 'var(--hover,#f1f5f9)', borderRadius: 8, padding: '8px 10px', fontSize: 12, wordBreak: 'break-all', marginBottom: 10 }}>{fnBase}</code>
+            <ul style={{ fontSize: 13, lineHeight: 2, paddingLeft: 20 }}>
+              <li><b>LINE OA:</b> ใส่ Webhook URL นี้ใน LINE Developers → ระบบอ่านรูปแบบ LINE ได้ในตัว (channel_id = social)</li>
+              <li><b>Facebook / อื่น ๆ:</b> ผ่านตัวกลาง (n8n / Make / Zapier) แนบ header <code>x-voc-secret</code> แล้วส่งต่อ</li>
+              <li>เปิดใช้งาน + สุ่ม secret รายช่องทางที่เมนู <b>จัดการระบบ → ตั้งค่า API</b></li>
+            </ul>
+            <Link className="btn" href="/admin">ไปตั้งค่า API ช่องทาง →</Link>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>* ต้องสร้าง Edge Function <code>ingest-voc</code> ใน Supabase ก่อน (ดู <b>เชื่อมต่อ_API_ช่องทาง.md</b>)</div>
+          </div>
+        )}
         </>
         )}
       </div>
