@@ -3,6 +3,7 @@
 // 1) ผู้ใช้งานและบทบาท (เปลี่ยนบทบาทได้) 2) การเชื่อมต่อ 8 ช่องทาง 3) Data Mapping & Dictionary
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { DEPT_GROUPS } from '../../lib/data';
 
 const ROLE_TH: Record<string, string> = { pending: 'รออนุมัติ', admin: 'แอดมิน', operator: 'ผู้ปฏิบัติงาน', executive: 'ผู้บริหาร' };
 const ROLE_RIGHT: Record<string, string> = {
@@ -210,6 +211,22 @@ export default function AdminPage() {
             วิธีใช้: ระบบต้นทางส่ง <code>POST</code> มาที่ endpoint พร้อม header <code>x-voc-secret</code> = secret ของช่องทาง<br />
             รูปแบบข้อมูล: <code>{'{ "channel_id": "call", "text": "ข้อความลูกค้า", "source": "Call Center 1615" }'}</code> หรือ LINE webhook ส่งตรงได้เลย (channel_id = social อัตโนมัติ)<br />
             ดูวิธีเชื่อม LINE OA / Facebook / Google Forms / Email ทีละขั้นในไฟล์ <b>เชื่อมต่อ_API_ช่องทาง.md</b>
+          </div>
+        </div>
+
+        {/* โครงสร้างฝ่าย กคช. */}
+        <div className="card">
+          <h3>🏢 โครงสร้างฝ่าย การเคหะแห่งชาติ (ใช้กับ &ldquo;หน่วยงานที่เกี่ยวข้อง&rdquo;)</h3>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>อ้างอิงมติคณะกรรมการฯ ก.พ. 2565 — แยกตาม 8 สายงาน · ระบบจับคู่ฝ่ายให้อัตโนมัติตามประเภทเสียง</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12 }}>
+            {DEPT_GROUPS.map(g => (
+              <div key={g.group} style={{ border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px' }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1f3a93', marginBottom: 6 }}>{g.group}</div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.9 }}>
+                  {g.depts.map(d => <li key={d}>{d}</li>)}
+                </ul>
+              </div>
+            ))}
           </div>
         </div>
 
