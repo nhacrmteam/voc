@@ -250,8 +250,9 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
                 <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', fontSize: 12, padding: '8px 11px', borderRadius: 8, margin: '2px 0 12px' }}>
                   ℹ️ บทบาทที่เลือกเป็นเพียง &ldquo;คำขอ&rdquo; — แอดมินจะอนุมัติบทบาทจริงให้ก่อนเข้าใช้งาน
                 </div>
-                <label style={lab}>อีเมลพนักงาน *</label>
-                <input style={inp} value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="you@nha.co.th" />
+                <label style={lab}>อีเมล * (อีเมลพนักงาน หรือ อีเมลภายนอก เช่น Gmail)</label>
+                <input style={inp} value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="you@nha.co.th หรือ you@gmail.com" />
+                <div style={{ fontSize: 11.5, color: '#64748b', margin: '-8px 0 12px' }}>ใช้อีเมลจริงที่เปิดได้ เพราะต้องยืนยันอีเมลก่อนใช้งาน</div>
                 <label style={lab}>รหัสผ่าน * (อย่างน้อย 6 ตัว)</label>
                 <PwInput value={pw} onChange={e => setPw(e.target.value)} placeholder="••••••••" minLen={6} />
                 <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังสมัคร…' : 'สมัครใช้งาน'}</button>
