@@ -117,25 +117,83 @@ export function analyzeText(text: string, channel?: string): AiResult {
 
 // ---------- วิเคราะห์ด้วย LLM จริง (Edge Function analyze-voc) + fallback เป็น rule ----------
 // via: 'llm' = ผลจาก LLM, 'rule' = fallback keyword (LLM ใช้ไม่ได้/ยังไม่ตั้งค่า)
-export type SmartResult = AiResult & { via: 'llm' | 'rule' };
+export type SmartResult = AiResult & { via: 'llm' | 'rule'; model?: string };
+
+export const LLM_BATCH_SIZE = 10;   // ต้องไม่เกิน MAX_BATCH ใน Edge Function
+
+// แปลง payload ที่ได้จาก LLM → AiResult (เติมค่าที่ขาดด้วย rule-based)
+function fromLLM(d: any, text: string, channel: string | undefined, model?: string): SmartResult {
+  return {
+    sentiment: d.sentiment,
+    conf: d.confidence ?? 70,
+    uncertain: !!d.uncertain,
+    reason: d.reason || 'วิเคราะห์โดย LLM',
+    journey: d.journey ?? aiJourney(text),
+    catProduct: d.catProduct ?? catProd(text),
+    catSales: d.catSales ?? catSal(text),
+    owner: d.owner ?? ownerFor(text, channel),
+    priority: d.priority ?? 'Low',
+    via: 'llm',
+    model,
+  };
+}
+
+/** วิเคราะห์ข้อความเดียว — LLM ก่อน ถ้าไม่ได้ใช้ rule-based */
 export async function analyzeSmart(text: string, channel?: string): Promise<SmartResult> {
   const { supabase } = await import('./supabaseClient');
   if (supabase) {
     try {
       const { data, error } = await supabase.functions.invoke('analyze-voc', { body: { text, channel } });
-      if (!error && data && data.sentiment && !data.error) {
-        return {
-          sentiment: data.sentiment, conf: data.confidence ?? 70, uncertain: !!data.uncertain,
-          reason: data.reason || 'วิเคราะห์โดย LLM',
-          journey: data.journey ?? aiJourney(text),
-          catProduct: data.catProduct ?? catProd(text),
-          catSales: data.catSales ?? catSal(text),
-          owner: data.owner ?? ownerFor(text, channel),
-          priority: data.priority ?? 'Low',
-          via: 'llm',
-        };
-      }
+      if (!error && data && data.sentiment && !data.error) return fromLLM(data, text, channel, data.model);
     } catch { /* ตกลงมาใช้ rule-based */ }
   }
   return { ...analyzeText(text, channel), via: 'rule' };
+}
+
+/**
+ * วิเคราะห์หลายข้อความในคำขอเดียว (เร็วกว่าเรียกทีละอัน ~5-8 เท่า)
+ * - แบ่งเป็นชุดละ LLM_BATCH_SIZE โดยอัตโนมัติ
+ * - ชุดไหน LLM ล้มเหลว → ชุดนั้น fallback เป็น rule-based (ชุดอื่นยังใช้ LLM ได้)
+ * - onProgress(done, total) สำหรับแสดงความคืบหน้า
+ */
+export async function analyzeSmartBatch(
+  texts: string[],
+  channel?: string,
+  onProgress?: (done: number, total: number) => void,
+): Promise<SmartResult[]> {
+  const out: SmartResult[] = [];
+  const { supabase } = await import('./supabaseClient');
+  for (let i = 0; i < texts.length; i += LLM_BATCH_SIZE) {
+    const chunk = texts.slice(i, i + LLM_BATCH_SIZE);
+    let done = false;
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.functions.invoke('analyze-voc', { body: { texts: chunk, channel } });
+        const rs = data?.results;
+        if (!error && Array.isArray(rs) && rs.length === chunk.length && !data.error) {
+          rs.forEach((d: any, j: number) => out.push(fromLLM(d, chunk[j], channel, data.model)));
+          done = true;
+        }
+      } catch { /* ตกลงมาใช้ rule-based เฉพาะชุดนี้ */ }
+    }
+    if (!done) chunk.forEach(t => out.push({ ...analyzeText(t, channel), via: 'rule' }));
+    onProgress?.(Math.min(i + chunk.length, texts.length), texts.length);
+  }
+  return out;
+}
+
+/** ทดสอบการเชื่อมต่อ LLM (ใช้ในหน้าจัดการระบบ) */
+export interface LlmPing { ok: boolean; model?: string; base?: string; latencyMs?: number; sample?: any; error?: string }
+export async function pingLLM(): Promise<LlmPing> {
+  const { supabase } = await import('./supabaseClient');
+  if (!supabase) return { ok: false, error: 'ยังไม่ได้เชื่อมต่อ Supabase (ตั้งค่า ENV ก่อน)' };
+  try {
+    const { data, error } = await supabase.functions.invoke('analyze-voc', { body: { ping: true } });
+    if (error) return { ok: false, error: error.message || 'เรียก Edge Function ไม่สำเร็จ (ยัง Deploy หรือยัง?)' };
+    if (data?.error) return { ok: false, error: String(data.error) };
+    if (data?.ok) return { ok: true, model: data.model, base: data.base, latencyMs: data.latencyMs, sample: data.sample };
+    return { ok: false, error: 'ผลลัพธ์ไม่ถูกต้อง: ' + JSON.stringify(data).slice(0, 200) };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
 }
