@@ -87,10 +87,22 @@ export function ownerFor(text: string, channel?: string): string {
   return 'ฝ่ายการตลาด';
 }
 
-// ---------- Priority ----------
+// ---------- ความรุนแรงรายเสียง (Priority) ----------
+// คิดจาก: ความลบ + ความเข้ม + ผลกระทบสูง (ความปลอดภัย/การเงิน/กฎหมาย) — ไม่ใช่แค่ลบ/ไม่ลบ
+export const IMPACT_SAFETY = ['อันตราย', 'ไม่ปลอดภัย', 'ไฟไหม้', 'ไฟดับ', 'มืด', 'รั่ว', 'ทรุด', 'ล้ม', 'บาดเจ็บ'];
+export const IMPACT_FINLEGAL = ['ฟ้อง', 'กฎหมาย', 'ทุจริต', 'โกง', 'หนี้', 'ยึด'];
+const INTENSE = ['มาก', 'สุด', 'เกินไป', 'ตลอด', 'หลายวัน', 'ทุกครั้ง', 'ด่วน', 'เร่งด่วน'];
+export function impactLevel(text: string): number {
+  const t = text || '';
+  return (IMPACT_SAFETY.some(k => t.includes(k)) ? 2 : 0) + (IMPACT_FINLEGAL.some(k => t.includes(k)) ? 1 : 0);
+}
 export function aiPriority(s: AiSent, text: string): Priority {
-  const urgent = ['ด่วน', 'อันตราย', 'ไม่ปลอดภัย', 'หลายวัน', 'ตลอด'].some(k => (text || '').includes(k));
-  if (s.sentiment === 'Negative') return urgent || s.conf >= 85 ? 'High' : 'Medium';
+  const t = text || '';
+  let score = s.sentiment === 'Negative' ? 2 : s.sentiment === 'Positive' ? -1 : 0;
+  if (INTENSE.some(k => t.includes(k))) score += 1;
+  score += impactLevel(t);            // +2 ความปลอดภัย, +1 การเงิน/กฎหมาย
+  if (score >= 3) return 'High';
+  if (score >= 1) return 'Medium';
   return 'Low';
 }
 
