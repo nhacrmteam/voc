@@ -95,6 +95,34 @@ function normDate(v: string): string {
   return s;
 }
 
+// ---------- ปีงบประมาณ: ช่วงวันที่ของไตรมาสปัจจุบัน (ใช้เป็นค่าเริ่มต้นตอนไฟล์ไม่มีคอลัมน์วันที่) ----------
+function currentFYRange(): { from: string; to: string; label: string } {
+  const d = new Date(); const y = d.getFullYear(), mo = d.getMonth();   // 0=ม.ค. … 9=ต.ค.
+  const be = (mo >= 9 ? y + 1 : y) + 543;
+  const s = be - 543 - 1, e = be - 543;
+  const Q: Record<string, [string, string, string]> = {
+    q1: [s + '-10-01', s + '-12-31', 'ไตรมาส 1 (ต.ค.–ธ.ค.)'],
+    q2: [e + '-01-01', e + '-03-31', 'ไตรมาส 2 (ม.ค.–มี.ค.)'],
+    q3: [e + '-04-01', e + '-06-30', 'ไตรมาส 3 (เม.ย.–มิ.ย.)'],
+    q4: [e + '-07-01', e + '-09-30', 'ไตรมาส 4 (ก.ค.–ก.ย.)'],
+  };
+  const q = mo >= 9 ? 'q1' : mo <= 2 ? 'q2' : mo <= 5 ? 'q3' : 'q4';
+  const [from, to, qLabel] = Q[q];
+  const today = new Date().toISOString().slice(0, 10);
+  return { from, to: to > today ? today : to, label: 'ปีงบ ' + be + ' · ' + qLabel };   // ไม่ให้เกินวันนี้
+}
+
+// ---------- กระจายวันที่เท่า ๆ กันในช่วง from…to สำหรับ n แถว ----------
+function spreadDates(from: string, to: string, n: number): string[] {
+  const a = Date.parse(from + 'T00:00:00Z'), b = Date.parse(to + 'T00:00:00Z');
+  if (isNaN(a) || isNaN(b) || n <= 0) return Array(Math.max(n, 0)).fill(from);
+  const lo = Math.min(a, b), hi = Math.max(a, b);
+  if (n === 1) return [new Date(lo).toISOString().slice(0, 10)];
+  return Array.from({ length: n }, (_, i) =>
+    new Date(lo + Math.round((hi - lo) * i / (n - 1))).toISOString().slice(0, 10));
+}
+
+interface ColMap { date: number; text: number; topic: number; src: number; prod: number; jr: number }
 interface Parsed { occurred: string; topic: string; text: string; source: string; product: string; journey: string; err: string }
 
 const inp: React.CSSProperties = { padding: '9px 11px', border: '1px solid #dfe6f0', borderRadius: 8, fontSize: 13.5, fontFamily: 'inherit', background: '#fff' };
@@ -112,6 +140,13 @@ export default function ImportPage() {
   const [err, setErr] = useState('');
   const [useLLM, setUseLLM] = useState(false);
   const [prog, setProg] = useState('');
+  // ตารางดิบจากไฟล์ + การจับคู่คอลัมน์ (ผู้ใช้แก้เองได้) + ช่วงวันที่กรณีไฟล์ไม่มีคอลัมน์วันที่
+  const [grid, setGrid] = useState<string[][]>([]);
+  const [headRow, setHeadRow] = useState(0);
+  const [cmap, setCmap] = useState<ColMap>({ date: -1, text: -1, topic: -1, src: -1, prod: -1, jr: -1 });
+  const [dFrom, setDFrom] = useState('');
+  const [dTo, setDTo] = useState('');
+  const [fyLabel, setFyLabel] = useState('');
   const [method, setMethod] = useState<'file' | 'api' | 'forms' | 'db'>('file');
   const [history, setHistory] = useState<UploadLog[]>([]);
   const fnBase = (process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://<โปรเจกต์>.supabase.co') + '/functions/v1/ingest-voc';
@@ -125,6 +160,12 @@ export default function ImportPage() {
   }
 
   const ch = CH.find(c => c.id === chId)!;
+
+  // ค่าเริ่มต้นช่วงวันที่ = ไตรมาสปัจจุบันของปีงบประมาณ (คำนวณฝั่ง client กัน hydration mismatch)
+  useEffect(() => {
+    const r = currentFYRange();
+    setDFrom(r.from); setDTo(r.to); setFyLabel(r.label);
+  }, []);
 
   useEffect(() => {
     if (!supabase) { setRole('mock'); return; }
@@ -150,7 +191,7 @@ export default function ImportPage() {
   }
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    setMsg(''); setErr(''); setRows([]);
+    setMsg(''); setErr(''); setRows([]); setGrid([]);
     const f = e.target.files?.[0]; if (!f) return;
     setFileName(f.name);
     const isXlsx = /\.(xlsx|xls)$/i.test(f.name);
@@ -176,62 +217,60 @@ export default function ImportPage() {
     reader.readAsText(f, 'utf-8');
   }
 
-  function handleGrid(grid: string[][]) {
-    if (grid.length < 2) { setErr('ไฟล์ว่างหรือไม่มีข้อมูล (ต้องมีหัวตาราง + อย่างน้อย 1 แถว)'); return; }
+  // อ่านไฟล์เสร็จ → เดาแถวหัวตาราง + จับคู่คอลัมน์ให้อัตโนมัติ (ผู้ใช้แก้เองได้ในการ์ด "จับคู่คอลัมน์")
+  function handleGrid(g: string[][]) {
+    if (g.length < 2) { setErr('ไฟล์ว่างหรือไม่มีข้อมูล (ต้องมีหัวตาราง + อย่างน้อย 1 แถว)'); setGrid([]); return; }
 
-    // หาแถวหัวตารางเอง — ไฟล์จริงมักมีบรรทัดชื่อรายงาน/โลโก้อยู่ข้างบนก่อน
-    let hr = -1, iDate = -1, iText = -1;
-    for (let i = 0; i < Math.min(grid.length, 10); i++) {
-      const d = findCol(grid[i], HKEY.date);
-      const t = findCol(grid[i], HKEY.text, d >= 0 ? [d] : []);
-      if (d >= 0 && t >= 0) { hr = i; iDate = d; iText = t; break; }
+    let hr = 0, best = -1;
+    for (let i = 0; i < Math.min(g.length, 10); i++) {
+      const t = findCol(g[i], HKEY.text);
+      const d = findCol(g[i], HKEY.date);
+      // ให้น้ำหนัก: เจอคอลัมน์ข้อความ 3 · เจอวันที่ 2 · จำนวนช่องที่ไม่ว่าง (หัวตารางมักเต็มแถว)
+      const score = (t >= 0 ? 3 : 0) + (d >= 0 ? 2 : 0) + Math.min(g[i].filter(Boolean).length, 10) / 100;
+      if (score > best) { best = score; hr = i; }
     }
-    if (hr < 0) {
-      const shown = (grid[0] || []).filter(Boolean).join(' | ').slice(0, 400);
-      setErr('ไม่พบคอลัมน์วันที่ และ/หรือ ข้อความเสียงลูกค้าในไฟล์นี้' +
-        (shown ? ' · หัวตารางที่อ่านได้: ' + shown : '') +
-        ' — เปลี่ยนชื่อหัวคอลัมน์ให้มีคำว่า "วันที่" และ "ข้อความ" (หรือดาวน์โหลดเทมเพลตจากหน้านี้)');
-      return;
-    }
-
-    const head = grid[hr];
-    const used = [iDate, iText];
-    const iTopic = findCol(head, HKEY.topic, used);
-    const iSrc = findCol(head, HKEY.src, used);
-    const iProd = findCol(head, HKEY.prod, used);
-    const iJr = findCol(head, HKEY.jr, used);
-    const cell = (r: string[], i: number) => (i >= 0 ? (r[i] ?? '').trim() : '');
-
-    let dropped = 0;
-    const out: Parsed[] = grid.slice(hr + 1)
-      .filter(r => cell(r, iDate) !== '' || cell(r, iText) !== '')   // ตัดแถวท้ายไฟล์ที่ว่าง/แถวรวมยอด
-      .map(r => {
-        // ค่ากลุ่มผลิตภัณฑ์/Journey ที่ไม่ตรงรายการมาตรฐาน → ปล่อยว่างแทนที่จะฟ้อง error ทั้งแถว
-        const prod = cell(r, iProd), jr = cell(r, iJr);
-        const okProd = PRODUCTS.includes(prod) ? prod : '';
-        const okJr = JOURNEYS.includes(jr) ? jr : '';
-        if ((prod && !okProd) || (jr && !okJr)) dropped++;
-        const p: Parsed = {
-          occurred: normDate(cell(r, iDate)),
-          topic: cell(r, iTopic),
-          text: cell(r, iText),
-          source: cell(r, iSrc),
-          product: okProd,
-          journey: okJr,
-          err: '',
-        };
-        p.err = validateRow(p);
-        return p;
-      });
-
-    if (!out.length) { setErr('พบหัวตารางแล้ว แต่ไม่มีแถวข้อมูลด้านล่าง'); return; }
+    const head = g[hr];
+    const iDate = findCol(head, HKEY.date);
+    const iText = findCol(head, HKEY.text, iDate >= 0 ? [iDate] : []);
+    const used = [iDate, iText].filter(x => x >= 0);
+    setGrid(g);
+    setHeadRow(hr);
+    setCmap({
+      date: iDate, text: iText,
+      topic: findCol(head, HKEY.topic, used),
+      src: findCol(head, HKEY.src, used),
+      prod: findCol(head, HKEY.prod, used),
+      jr: findCol(head, HKEY.jr, used),
+    });
     setErr('');
-    const good = out.filter(x => !x.err).length;
-    setMsg('อ่านไฟล์สำเร็จ ' + out.length + ' แถว · ผ่านการตรวจ ' + good + ' แถว' +
-      (out.length - good ? ' · ต้องแก้ ' + (out.length - good) + ' แถว (แก้ในตารางด้านล่างได้)' : '') +
-      (dropped ? ' · ข้ามค่ากลุ่มผลิตภัณฑ์/Journey ที่ไม่ตรงรายการ ' + dropped + ' แถว' : ''));
-    setRows(out);
+    setMsg(iText >= 0
+      ? 'อ่านไฟล์สำเร็จ — ตรวจการจับคู่คอลัมน์ด้านล่างให้ถูกต้องก่อนบันทึก'
+      : 'อ่านไฟล์สำเร็จ แต่หา "ข้อความเสียงลูกค้า" อัตโนมัติไม่เจอ — เลือกคอลัมน์เองในการ์ดจับคู่คอลัมน์ด้านล่าง');
   }
+
+  // สร้างรายการที่จะบันทึกจาก grid + การจับคู่คอลัมน์ + ช่วงวันที่ (คำนวณใหม่ทุกครั้งที่ผู้ใช้เปลี่ยนค่า)
+  useEffect(() => {
+    if (!grid.length || cmap.text < 0) { setRows([]); return; }
+    const cell = (r: string[], i: number) => (i >= 0 ? (r[i] ?? '').trim() : '');
+    const body = grid.slice(headRow + 1).filter(r => cell(r, cmap.text) !== '' || cell(r, cmap.date) !== '');
+    // ไม่มีคอลัมน์วันที่ (เช่น แบบสอบถามกระดาษ) → กระจายวันที่เท่า ๆ กันในช่วงที่เลือก
+    const auto = cmap.date < 0 ? spreadDates(dFrom, dTo, body.length) : [];
+    const out: Parsed[] = body.map((r, i) => {
+      const prod = cell(r, cmap.prod), jr = cell(r, cmap.jr);
+      const p: Parsed = {
+        occurred: cmap.date >= 0 ? normDate(cell(r, cmap.date)) : (auto[i] || dFrom),
+        topic: cell(r, cmap.topic),
+        text: cell(r, cmap.text),
+        source: cell(r, cmap.src),
+        product: PRODUCTS.includes(prod) ? prod : '',      // ค่าที่ไม่ตรงรายการมาตรฐาน → ปล่อยว่าง
+        journey: JOURNEYS.includes(jr) ? jr : '',
+        err: '',
+      };
+      p.err = validateRow(p);
+      return p;
+    });
+    setRows(out);
+  }, [grid, headRow, cmap, dFrom, dTo]);
 
   // ตรวจสอบความถูกต้องต่อแถว (ใช้ทั้งตอนอ่านไฟล์และตอนแก้ไข)
   function validateRow(p: Parsed): string {
@@ -254,6 +293,16 @@ export default function ImportPage() {
 
   const ok = rows.filter(r => !r.err);
   const bad = rows.filter(r => r.err);
+
+  // ตัวเลือกคอลัมน์ใน dropdown จับคู่ (ใช้ชื่อจากแถวหัวตาราง ถ้าว่างใช้ "คอลัมน์ N")
+  const colOptions = (() => {
+    const width = grid.reduce((m, r) => Math.max(m, r.length), 0);
+    const head = grid[headRow] || [];
+    return Array.from({ length: width }, (_, i) => ({
+      i,
+      label: (i + 1) + '. ' + ((head[i] || '').trim() || '(ไม่มีชื่อ)').slice(0, 60),
+    }));
+  })();
 
   async function save() {
     if (!supabase || !ok.length) return;
@@ -333,7 +382,7 @@ export default function ImportPage() {
               : ' · LLM ' + llmCount + ' แถว, rule-based ' + (ok.length - llmCount) + ' แถว (LLM ใช้ไม่ได้บางส่วน)')
           : ' · วิเคราะห์แบบ rule-based') +
         ' — ดูได้ในเมนูรายการ VOC');
-      setRows([]); setFileName('');
+      setRows([]); setFileName(''); setGrid([]);
     } catch (e: any) {
       setErr('นำเข้าไม่สำเร็จ: ' + (e.message || String(e)));
     }
@@ -390,13 +439,90 @@ export default function ImportPage() {
           <h3>2️⃣ อัปโหลดไฟล์ CSV หรือ Excel</h3>
           <input type="file" accept=".csv,.txt,.xlsx,.xls" onChange={onFile} style={{ marginTop: 8, fontSize: 13.5, fontFamily: 'inherit' }} />
           {fileName && <span style={{ fontSize: 12.5, color: 'var(--muted)', marginLeft: 10 }}>{fileName}</span>}
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>* รองรับ .csv และ .xlsx (อ่านแผ่นแรก) — หัวตารางตามเทมเพลต</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
+            * รองรับ .csv และ .xlsx (อ่านแผ่นแรก) · ไม่ต้องตรงเทมเพลตก็ได้ — ขั้นถัดไปจะให้เลือกเองว่าคอลัมน์ไหนคืออะไร
+          </div>
         </div>
 
-        {/* ขั้น 3: พรีวิว + บันทึก */}
+        {/* ขั้น 3: จับคู่คอลัมน์ */}
+        {grid.length > 0 && (
+          <div className="card">
+            <h3>3️⃣ จับคู่คอลัมน์ — บอกระบบว่าคอลัมน์ไหนคืออะไร</h3>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+              ระบบเดาให้แล้วจากหัวตาราง · แก้ได้ถ้าไม่ถูก — ไฟล์แบบสอบถามที่คอลัมน์เป็นคำถามข้อ 1, 2, 3… ต้องเลือกเองว่าข้อไหนคือ &ldquo;ข้อความเสียงลูกค้า&rdquo;
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 12 }}>
+              <label style={{ fontSize: 12.5 }}>
+                <div style={{ marginBottom: 4, color: 'var(--muted)' }}>แถวหัวตาราง</div>
+                <select style={{ ...inp, width: '100%' }} value={headRow} onChange={e => setHeadRow(+e.target.value)}>
+                  {grid.slice(0, 10).map((r, i) => (
+                    <option key={i} value={i}>แถวที่ {i + 1} — {r.filter(Boolean).slice(0, 3).join(' / ').slice(0, 45) || '(ว่าง)'}</option>
+                  ))}
+                </select>
+              </label>
+
+              {([
+                ['text', 'ข้อความเสียงลูกค้า *', true],
+                ['date', 'วันที่เกิดเรื่อง', false],
+                ['topic', 'หัวข้อ/ประเด็น', false],
+                ['src', 'แหล่งที่มา', false],
+                ['prod', 'กลุ่มผลิตภัณฑ์', false],
+                ['jr', 'Journey', false],
+              ] as const).map(([k, label, req]) => (
+                <label key={k} style={{ fontSize: 12.5 }}>
+                  <div style={{ marginBottom: 4, color: req ? 'var(--red)' : 'var(--muted)' }}>{label}</div>
+                  <select style={{ ...inp, width: '100%' }} value={cmap[k]}
+                    onChange={e => setCmap(m => ({ ...m, [k]: +e.target.value }))}>
+                    <option value={-1}>{k === 'date' ? '— ไม่มีในไฟล์ (ให้ระบบเติมให้) —' : '— ไม่ใช้ —'}</option>
+                    {colOptions.map(o => <option key={o.i} value={o.i}>{o.label}</option>)}
+                  </select>
+                </label>
+              ))}
+            </div>
+
+            {/* ไม่มีคอลัมน์วันที่ → ให้ระบุช่วงแล้วกระจายเท่า ๆ กัน */}
+            {cmap.date < 0 && (
+              <div style={{ marginTop: 14, background: '#f1f5f9', borderRadius: 10, padding: '11px 13px' }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>
+                  📅 ไฟล์ไม่มีวันที่ — ระบบจะกระจายวันที่เท่า ๆ กันในช่วงที่กำหนด
+                </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5 }}>
+                  <label>ตั้งแต่ <input type="date" style={{ ...inp, padding: '6px 9px' }} value={dFrom} onChange={e => setDFrom(e.target.value)} /></label>
+                  <label>ถึง <input type="date" style={{ ...inp, padding: '6px 9px' }} value={dTo} onChange={e => setDTo(e.target.value)} /></label>
+                  <button className="btn" type="button" style={{ padding: '6px 12px', fontSize: 12 }}
+                    onClick={() => { const r = currentFYRange(); setDFrom(r.from); setDTo(r.to); }}>
+                    ↺ ใช้ไตรมาสปัจจุบัน
+                  </button>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8 }}>
+                  ค่าเริ่มต้น = {fyLabel || 'ไตรมาสปัจจุบันของปีงบประมาณ'} (ไม่เกินวันนี้) · แก้วันรายแถวได้อีกในตารางด้านล่าง
+                </div>
+              </div>
+            )}
+
+            {cmap.text < 0 && (
+              <div style={{ fontSize: 12.5, color: '#b91c1c', marginTop: 12 }}>
+                ⚠ ต้องเลือกคอลัมน์ &ldquo;ข้อความเสียงลูกค้า&rdquo; ก่อน จึงจะแสดงตารางตรวจสอบและบันทึกได้
+              </div>
+            )}
+
+            {/* ตัวอย่างข้อมูล 3 แถวแรกของคอลัมน์ที่เลือก — ช่วยยืนยันว่าเลือกถูก */}
+            {cmap.text >= 0 && (
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12, lineHeight: 1.8 }}>
+                ตัวอย่างข้อความที่เลือก:
+                {grid.slice(headRow + 1, headRow + 4).map((r, i) => (
+                  <div key={i} style={{ color: 'inherit' }}>• {(r[cmap.text] || '(ว่าง)').slice(0, 110)}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ขั้น 4: พรีวิว + บันทึก */}
         {rows.length > 0 && (
           <div className="card">
-            <h3>3️⃣ ตรวจสอบ/แก้ไขก่อนบันทึก — ผ่าน <b style={{ color: 'var(--green)' }}>{ok.length}</b> / มีปัญหา <b style={{ color: 'var(--red)' }}>{bad.length}</b></h3>
+            <h3>4️⃣ ตรวจสอบ/แก้ไขก่อนบันทึก — ผ่าน <b style={{ color: 'var(--green)' }}>{ok.length}</b> / มีปัญหา <b style={{ color: 'var(--red)' }}>{bad.length}</b></h3>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>แก้ไขในช่องได้เลย (ตรวจสอบใหม่ทันที) · แถวที่มีปัญหาเป็นพื้นแดง · กด 🗑️ เพื่อลบแถว</div>
             <div style={{ maxHeight: 440, overflow: 'auto', border: '1px solid var(--line)', borderRadius: 10 }}>
               <table style={{ fontSize: 12.5 }}>
