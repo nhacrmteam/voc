@@ -1,11 +1,11 @@
 'use client';
 // นำเข้าข้อมูล — อัปโหลดไฟล์ CSV เข้าตาราง voc_record (แอดมิน/ผู้ปฏิบัติงาน)
 // หลักการ: แยก "วันที่เกิดเรื่อง (ต้นทาง)" ที่มากับไฟล์ ออกจาก "วันที่นำเข้าระบบ" (บันทึกอัตโนมัติ = วันนี้)
-// Excel: ให้บันทึกเป็น CSV (UTF-8) ก่อนอัปโหลด — เทมเพลตดาวน์โหลดได้ในหน้านี้
+// รองรับ .csv และ .xlsx โดยตรง — หาแถวหัวตารางเองใน 10 แถวแรก + รับชื่อคอลัมน์หลายแบบ + แปลงวันที่ พ.ศ./d-m-Y ให้อัตโนมัติ
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { analyzeText, analyzeSmart, AiResult } from '../../lib/ai';
+import { analyzeText, analyzeSmartBatch, SmartResult } from '../../lib/ai';
 
 // ช่องทาง 8 ช่อง (id ตรงตาราง channel ใน Supabase)
 const CH = [
@@ -43,6 +43,56 @@ function parseCSV(text: string): string[][] {
   row.push(cur);
   if (row.some(x => x.trim() !== '')) rows.push(row);
   return rows;
+}
+
+// ---------- ทำตารางให้ "ทึบ" ทุกช่อง ----------
+// สำคัญ: SheetJS คืน array ที่มีรูโหว่ (sparse) เมื่อเซลล์ว่าง — .map() ข้ามรู แต่ .findIndex() ไม่ข้าม
+// ทำให้เจอ undefined แล้วพัง ("Cannot read properties of undefined") จึงต้องสร้างใหม่ด้วย Array.from
+function dense(rows: unknown[][]): string[][] {
+  return rows
+    .map(r => {
+      const a = Array.isArray(r) ? r : [];
+      return Array.from({ length: a.length }, (_, i) => String(a[i] ?? '').trim());
+    })
+    .filter(r => r.some(c => c !== ''));
+}
+
+// ---------- ชื่อหัวคอลัมน์ที่ยอมรับ (ไฟล์จริงมักไม่ตรงเทมเพลตเป๊ะ) ----------
+const HKEY = {
+  date: ['วันที่'],
+  text: ['ข้อความ', 'เสียงลูกค้า', 'รายละเอียด', 'ความคิดเห็น', 'ข้อเสนอแนะ', 'ความเห็น', 'voice', 'comment'],
+  topic: ['หัวข้อ', 'ประเด็น', 'เรื่องที่', 'topic'],
+  src: ['แหล่ง', 'ที่มา', 'ช่องทาง', 'source'],
+  prod: ['ผลิตภัณฑ์', 'product'],
+  jr: ['journey', 'ขั้นตอน'],
+};
+function findCol(head: string[], keys: string[], skip: number[] = []): number {
+  const low = head.map(h => (h || '').toLowerCase());
+  for (const k of keys) {
+    const kk = k.toLowerCase();
+    const i = low.findIndex((h, idx) => !skip.includes(idx) && h.includes(kk));
+    if (i >= 0) return i;
+  }
+  return -1;
+}
+
+// ---------- แปลงวันที่หลายรูปแบบ → YYYY-MM-DD (รองรับ พ.ศ. และ วัน/เดือน/ปี) ----------
+function normDate(v: string): string {
+  const s = (v || '').trim();
+  if (!s) return '';
+  const fix = (y: number, mo: number, d: number) => {
+    if (y > 2400) y -= 543;                       // พ.ศ. → ค.ศ.
+    else if (y < 100) y += y > 50 ? 1900 : 2000;  // ปี 2 หลัก
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) return s;
+    return y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  };
+  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);      // 2026-07-10 / 2569-07-10
+  if (m) return fix(+m[1], +m[2], +m[3]);
+  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);          // 10/07/2026 · 10/07/2569
+  if (m) return fix(+m[3], +m[2], +m[1]);
+  const d = new Date(s);                                        // รูปแบบอื่นที่ JS อ่านออก
+  if (!isNaN(d.getTime())) return fix(d.getFullYear(), d.getMonth() + 1, d.getDate());
+  return s;
 }
 
 interface Parsed { occurred: string; topic: string; text: string; source: string; product: string; journey: string; err: string }
@@ -113,42 +163,74 @@ export default function ImportPage() {
           const XLSX = await import('xlsx');
           const wb = XLSX.read(reader.result, { type: 'array', cellDates: true });
           const ws = wb.Sheets[wb.SheetNames[0]];
-          const grid: string[][] = (XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' }) as any[][])
-            .map(r => (r || []).map(c => String(c ?? '').trim()))
-            .filter(r => r.some(c => c !== ''));
-          handleGrid(grid);
+          if (!ws) { setErr('ไฟล์ Excel นี้ไม่มีแผ่นงาน (sheet) ที่อ่านได้'); return; }
+          const raw = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, dateNF: 'yyyy-mm-dd', defval: '' }) as unknown[][];
+          handleGrid(dense(raw));
         } catch (ex: any) { setErr('อ่านไฟล์ Excel ไม่สำเร็จ: ' + (ex.message || String(ex))); }
       };
       reader.readAsArrayBuffer(f);
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => handleGrid(parseCSV(String(reader.result || '')));
+    reader.onload = () => handleGrid(dense(parseCSV(String(reader.result || ''))));
     reader.readAsText(f, 'utf-8');
   }
 
   function handleGrid(grid: string[][]) {
-    {
-      if (grid.length < 2) { setErr('ไฟล์ว่างหรือไม่มีข้อมูล (ต้องมีหัวตาราง + อย่างน้อย 1 แถว)'); return; }
-      const head = grid[0].map(h => h.trim());
-      const ix = (name: string) => head.findIndex(h => h.includes(name));
-      const iDate = ix('วันที่'), iTopic = ix('หัวข้อ'), iText = ix('ข้อความ'), iSrc = ix('แหล่ง'), iProd = ix('ผลิตภัณฑ์'), iJr = ix('Journey');
-      if (iDate < 0 || iText < 0) { setErr('ไม่พบคอลัมน์ "วันที่เกิดเรื่อง" หรือ "ข้อความเสียงลูกค้า" — ใช้เทมเพลตที่ดาวน์โหลดจากหน้านี้'); return; }
-      const out: Parsed[] = grid.slice(1).map(r => {
+    if (grid.length < 2) { setErr('ไฟล์ว่างหรือไม่มีข้อมูล (ต้องมีหัวตาราง + อย่างน้อย 1 แถว)'); return; }
+
+    // หาแถวหัวตารางเอง — ไฟล์จริงมักมีบรรทัดชื่อรายงาน/โลโก้อยู่ข้างบนก่อน
+    let hr = -1, iDate = -1, iText = -1;
+    for (let i = 0; i < Math.min(grid.length, 10); i++) {
+      const d = findCol(grid[i], HKEY.date);
+      const t = findCol(grid[i], HKEY.text, d >= 0 ? [d] : []);
+      if (d >= 0 && t >= 0) { hr = i; iDate = d; iText = t; break; }
+    }
+    if (hr < 0) {
+      const shown = (grid[0] || []).filter(Boolean).join(' | ').slice(0, 400);
+      setErr('ไม่พบคอลัมน์วันที่ และ/หรือ ข้อความเสียงลูกค้าในไฟล์นี้' +
+        (shown ? ' · หัวตารางที่อ่านได้: ' + shown : '') +
+        ' — เปลี่ยนชื่อหัวคอลัมน์ให้มีคำว่า "วันที่" และ "ข้อความ" (หรือดาวน์โหลดเทมเพลตจากหน้านี้)');
+      return;
+    }
+
+    const head = grid[hr];
+    const used = [iDate, iText];
+    const iTopic = findCol(head, HKEY.topic, used);
+    const iSrc = findCol(head, HKEY.src, used);
+    const iProd = findCol(head, HKEY.prod, used);
+    const iJr = findCol(head, HKEY.jr, used);
+    const cell = (r: string[], i: number) => (i >= 0 ? (r[i] ?? '').trim() : '');
+
+    let dropped = 0;
+    const out: Parsed[] = grid.slice(hr + 1)
+      .filter(r => cell(r, iDate) !== '' || cell(r, iText) !== '')   // ตัดแถวท้ายไฟล์ที่ว่าง/แถวรวมยอด
+      .map(r => {
+        // ค่ากลุ่มผลิตภัณฑ์/Journey ที่ไม่ตรงรายการมาตรฐาน → ปล่อยว่างแทนที่จะฟ้อง error ทั้งแถว
+        const prod = cell(r, iProd), jr = cell(r, iJr);
+        const okProd = PRODUCTS.includes(prod) ? prod : '';
+        const okJr = JOURNEYS.includes(jr) ? jr : '';
+        if ((prod && !okProd) || (jr && !okJr)) dropped++;
         const p: Parsed = {
-          occurred: (r[iDate] || '').trim(),
-          topic: iTopic >= 0 ? (r[iTopic] || '').trim() : '',
-          text: (r[iText] || '').trim(),
-          source: iSrc >= 0 ? (r[iSrc] || '').trim() : '',
-          product: iProd >= 0 ? (r[iProd] || '').trim() : '',
-          journey: iJr >= 0 ? (r[iJr] || '').trim() : '',
+          occurred: normDate(cell(r, iDate)),
+          topic: cell(r, iTopic),
+          text: cell(r, iText),
+          source: cell(r, iSrc),
+          product: okProd,
+          journey: okJr,
           err: '',
         };
         p.err = validateRow(p);
         return p;
       });
-      setRows(out);
-    }
+
+    if (!out.length) { setErr('พบหัวตารางแล้ว แต่ไม่มีแถวข้อมูลด้านล่าง'); return; }
+    setErr('');
+    const good = out.filter(x => !x.err).length;
+    setMsg('อ่านไฟล์สำเร็จ ' + out.length + ' แถว · ผ่านการตรวจ ' + good + ' แถว' +
+      (out.length - good ? ' · ต้องแก้ ' + (out.length - good) + ' แถว (แก้ในตารางด้านล่างได้)' : '') +
+      (dropped ? ' · ข้ามค่ากลุ่มผลิตภัณฑ์/Journey ที่ไม่ตรงรายการ ' + dropped + ' แถว' : ''));
+    setRows(out);
   }
 
   // ตรวจสอบความถูกต้องต่อแถว (ใช้ทั้งตอนอ่านไฟล์และตอนแก้ไข)
@@ -180,20 +262,17 @@ export default function ImportPage() {
       const { data: u } = await supabase.auth.getUser();
       const stamp = Date.now();
       // วิเคราะห์อัตโนมัติทุกแถวก่อนบันทึก — LLM (ถ้าเลือก) หรือ rule/keyword; เจ้าหน้าที่แก้ไขภายหลังได้
-      let ai: AiResult[];
+      let ai: SmartResult[];
       let llmCount = 0;
+      let model = '';
       if (useLLM) {
-        ai = [];
-        for (let i = 0; i < ok.length; i += 3) {   // ทีละ 3 แถว กัน rate limit
-          const batch = await Promise.all(ok.slice(i, i + 3).map(r =>
-            analyzeSmart((r.topic ? r.topic + ' ' : '') + r.text, chId)));
-          batch.forEach(b => { if (b.via === 'llm') llmCount++; });
-          ai.push(...batch);
-          setProg('วิเคราะห์ด้วย AI แล้ว ' + Math.min(i + 3, ok.length) + '/' + ok.length + ' แถว…');
-        }
+        const texts = ok.map(r => (r.topic ? r.topic + ' ' : '') + r.text);
+        ai = await analyzeSmartBatch(texts, chId, (done, total) =>
+          setProg('วิเคราะห์ด้วย AI แล้ว ' + done + '/' + total + ' แถว…'));
+        ai.forEach(b => { if (b.via === 'llm') { llmCount++; if (!model && b.model) model = b.model; } });
         setProg('');
       } else {
-        ai = ok.map(r => analyzeText((r.topic ? r.topic + ' ' : '') + r.text, chId));
+        ai = ok.map(r => ({ ...analyzeText((r.topic ? r.topic + ' ' : '') + r.text, chId), via: 'rule' as const }));
       }
       const payload = ok.map((r, i) => ({
         ref_code: 'VOC-' + stamp + '-' + (i + 1),
@@ -223,10 +302,20 @@ export default function ImportPage() {
           cat_product: ai[i + j].catProduct,
           cat_sales: ai[i + j].catSales,
           priority: ai[i + j].priority,
+          engine: ai[i + j].via,                        // 'llm' | 'rule' — ดูได้ในหน้า AI วิเคราะห์
+          model: ai[i + j].model ?? null,
+          analyzed_by: 'import',
         })).filter(a => a.voc_id);
         if (arows.length) {
           const { error: e2 } = await supabase.from('analysis').insert(arows);
-          if (e2) throw e2;
+          // ถ้ายังไม่ได้รัน supabase_llm_engine.sql จะไม่มีคอลัมน์ engine/model/analyzed_by → บันทึกซ้ำแบบไม่มีคอลัมน์ใหม่
+          if (e2) {
+            if (/engine|model|analyzed_by|column/i.test(e2.message || '')) {
+              const legacy = arows.map(({ engine, model, analyzed_by, ...rest }) => rest);
+              const { error: e3 } = await supabase.from('analysis').insert(legacy);
+              if (e3) throw e3;
+            } else throw e2;
+          }
         }
       }
       // บันทึกประวัติการอัปโหลด (ไม่ให้ error ตรงนี้ทำให้การนำเข้าล้ม)
@@ -238,7 +327,11 @@ export default function ImportPage() {
         loadHistory();
       } catch { /* ตาราง upload_log อาจยังไม่ถูกสร้าง — ข้าม */ }
       setMsg('นำเข้าสำเร็จ ' + ok.length + ' รายการ เข้าช่องทาง "' + ch.name + '"' +
-        (useLLM ? (llmCount === ok.length ? ' · วิเคราะห์ด้วย LLM ทั้งหมด' : ' · LLM ' + llmCount + ' แถว, rule-based ' + (ok.length - llmCount) + ' แถว (LLM ใช้ไม่ได้บางส่วน)') : '') +
+        (useLLM
+          ? (llmCount === ok.length
+              ? ' · วิเคราะห์ด้วย LLM ทั้งหมด' + (model ? ' (' + model + ')' : '')
+              : ' · LLM ' + llmCount + ' แถว, rule-based ' + (ok.length - llmCount) + ' แถว (LLM ใช้ไม่ได้บางส่วน)')
+          : ' · วิเคราะห์แบบ rule-based') +
         ' — ดูได้ในเมนูรายการ VOC');
       setRows([]); setFileName('');
     } catch (e: any) {
@@ -331,8 +424,13 @@ export default function ImportPage() {
                 <>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 10, cursor: 'pointer' }}>
                     <input type="checkbox" checked={useLLM} onChange={e => setUseLLM(e.target.checked)} />
-                    🧠 วิเคราะห์ด้วย LLM จริง (แม่นกว่า แต่ช้ากว่า — ต้องตั้งค่า Edge Function ก่อน, ถ้าใช้ไม่ได้จะสลับเป็น rule-based ให้อัตโนมัติ)
+                    🧠 วิเคราะห์ด้วย LLM จริง (แม่นกว่า — ส่งครั้งละ 10 แถว, ถ้า LLM ใช้ไม่ได้จะสลับเป็น rule-based ให้อัตโนมัติ)
                   </label>
+                  {useLLM && (
+                    <div style={{ fontSize: 12, color: 'var(--muted)', margin: '-4px 0 10px 26px' }}>
+                      ประมาณ {Math.ceil(ok.length / 10)} คำขอ · ตรวจการเชื่อมต่อ LLM ได้ที่เมนู &ldquo;จัดการระบบ&rdquo;
+                    </div>
+                  )}
                   <button className="btn" onClick={save} disabled={busy || !ok.length}>{busy ? (prog || 'กำลังนำเข้า…') : '💾 บันทึก ' + ok.length + ' รายการเข้าระบบ'}</button>
                 </>
                 )}
