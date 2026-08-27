@@ -9,7 +9,6 @@ import { computeCloud } from '../../lib/cloud';
 import WordCloud from '../components/WordCloud';
 import TrendChart from '../components/TrendChart';
 
-const PRODUCTS = ['อาคารเพื่อขาย/เช่าซื้อ', 'อาคารเช่า', 'เช่าจัดประโยชน์'];
 const QUARTERS: { k: string; label: string }[] = [
   { k: 'year', label: 'ทั้งปี (สะสม)' },
   { k: 'q1', label: 'ไตรมาส 1 (ต.ค.–ธ.ค.)' },
