@@ -27,8 +27,8 @@ export default async function VocDetail({ params }: { params: { id: string } }) 
           <table style={{ marginTop: 14 }}>
             <tbody>
               <tr><th>ช่องทาง</th><td>{r.channel}{r.source !== r.channel ? ' › ' + r.source : ''}</td><th>วันที่เกิดเรื่อง</th><td>{r.occurredAt}{r.imported ? ' · นำเข้า ' + r.importedAt + ' (ไฟล์)' : ' · เรียลไทม์'}</td></tr>
-              <tr><th>กลุ่มผลิตภัณฑ์</th><td>{r.product}</td><th>โครงการ</th><td>{r.project} ({r.projectType})</td></tr>
-              <tr><th>หัวข้อ</th><td>{r.topic}</td><th>Journey</th><td>{r.journey}</td></tr>
+              <tr><th>โครงการ</th><td>{r.project} ({r.projectType})</td><th>Journey</th><td>{r.journey}</td></tr>
+              <tr><th>หัวข้อ</th><td colSpan={3}>{r.topic}</td></tr>
               <tr><th>Sentiment</th><td><span className={'pill ' + sp}>{r.sentiment}</span></td><th>ความรุนแรง (Priority)</th><td><span className={'pill ' + pp}>{r.priority}</span></td></tr>
               <tr><th>ฝ่ายที่เกี่ยวข้อง</th><td>{r.owner}</td><th>หมวด AI (ผลิตภัณฑ์)</th><td>{r.catProduct}</td></tr>
               <tr><th>หมวด AI (สนับสนุนขาย)</th><td>{r.catSales}</td><th>ความเชื่อมั่น AI</th><td>{r.sentConf}%{r.sentManual ? ' · ✔ ยืนยันโดยเจ้าหน้าที่' : r.sentUncertain ? ' · ⚠ AI ไม่แน่ใจ' : ''}</td></tr>
