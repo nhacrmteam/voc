@@ -18,9 +18,8 @@ const CH = [
   { id: 'complain', name: 'ระบบร้องเรียน/ข้อเสนอแนะ', src: ['ระบบร้องเรียน'], realtime: false },
   { id: 'survey', name: 'แบบประเมินความพึงพอใจ', src: ['Google Forms', 'แบบสอบถามกระดาษ'], realtime: false },
 ];
-const PRODUCTS = ['อาคารเพื่อขาย/เช่าซื้อ', 'อาคารเช่า', 'เช่าจัดประโยชน์'];
 const JOURNEYS = ['Awareness', 'Consideration', 'Purchase', 'Service', 'Loyalty', 'Win Back'];
-const HEADERS = ['วันที่เกิดเรื่อง', 'หัวข้อ', 'ข้อความเสียงลูกค้า', 'แหล่งที่มา', 'กลุ่มผลิตภัณฑ์', 'Journey'];
+const HEADERS = ['วันที่เกิดเรื่อง', 'หัวข้อ', 'ข้อความเสียงลูกค้า', 'แหล่งที่มา', 'Journey'];
 // ขั้นตอนใน wizard อัปโหลดไฟล์
 const STEPS: [number, string][] = [[1, 'ช่องทาง'], [2, 'อัปโหลด'], [3, 'ตรวจจับคอลัมน์'], [4, 'ตรวจ & บันทึก']];
 
@@ -65,7 +64,6 @@ const HKEY = {
   text: ['ข้อความ', 'เสียงลูกค้า', 'รายละเอียด', 'ความคิดเห็น', 'ข้อเสนอแนะ', 'ความเห็น', 'voice', 'comment'],
   topic: ['หัวข้อ', 'ประเด็น', 'เรื่องที่', 'topic'],
   src: ['แหล่ง', 'ที่มา', 'ช่องทาง', 'source'],
-  prod: ['ผลิตภัณฑ์', 'product'],
   jr: ['journey', 'ขั้นตอน'],
 };
 function findCol(head: string[], keys: string[], skip: number[] = []): number {
@@ -216,7 +214,7 @@ function profileColumns(grid: string[][], headRow: number): ColInfo[] {
 
 // ---------- จำการจับคู่คอลัมน์ต่อช่องทาง (ไฟล์รอบหน้าของแหล่งเดิมจับคู่ให้เอง) ----------
 // เก็บเป็น "ชื่อหัวคอลัมน์" ไม่ใช่ตำแหน่ง — สลับลำดับคอลัมน์แล้วยังจำได้
-interface SavedMap { text: string[]; score: string[]; date: string; topic: string; src: string; prod: string; jr: string }
+interface SavedMap { text: string[]; score: string[]; date: string; topic: string; src: string; jr: string }
 const MAP_KEY = 'voc-colmap-';
 function loadSavedMap(chId: string): SavedMap | null {
   try { const s = localStorage.getItem(MAP_KEY + chId); return s ? JSON.parse(s) as SavedMap : null; } catch { return null; }
@@ -242,8 +240,8 @@ function cellScore(v: string, info: ColInfo): number | null {
   return null;
 }
 
-interface ColMap { date: number; topic: number; src: number; prod: number; jr: number }
-interface Parsed { occurred: string; topic: string; text: string; source: string; product: string; journey: string; score: number | null; err: string }
+interface ColMap { date: number; topic: number; src: number; jr: number }
+interface Parsed { occurred: string; topic: string; text: string; source: string; journey: string; score: number | null; err: string }
 
 const inp: React.CSSProperties = { padding: '9px 11px', border: '1px solid #dfe6f0', borderRadius: 8, fontSize: 13.5, fontFamily: 'inherit', background: '#fff' };
 const cellInp: React.CSSProperties = { padding: '5px 7px', border: '1px solid var(--line)', borderRadius: 6, fontSize: 12.5, fontFamily: 'inherit', background: 'var(--card,#fff)', color: 'inherit' };
@@ -267,7 +265,7 @@ export default function ImportPage() {
   const [textCols, setTextCols] = useState<number[]>([]);   // คอลัมน์ข้อความ (เลือกได้หลายช่อง → แยกเป็นหลายเสียง)
   const [scoreCols, setScoreCols] = useState<number[]>([]); // คอลัมน์คะแนนความพึงพอใจ
   const [useScore, setUseScore] = useState(true);
-  const [cmap, setCmap] = useState<ColMap>({ date: -1, topic: -1, src: -1, prod: -1, jr: -1 });
+  const [cmap, setCmap] = useState<ColMap>({ date: -1, topic: -1, src: -1, jr: -1 });
   const [dFrom, setDFrom] = useState('');
   const [dTo, setDTo] = useState('');
   const [fyLabel, setFyLabel] = useState('');
@@ -306,8 +304,8 @@ export default function ImportPage() {
   function downloadTemplate() {
     const example = [
       HEADERS.join(','),
-      '2026-07-10,แจ้งซ่อมไฟทางเดิน,"ไฟทางเดินหน้าอาคาร 3 ดับหลายจุด กลางคืนมืดมาก",' + (ch.src[0] || ch.name) + ',อาคารเช่า,Service',
-      '2026-07-11,สอบถามการจอง,"อยากจองบ้านโครงการใหม่ ต้องใช้เอกสารอะไรบ้าง",' + (ch.src[0] || ch.name) + ',อาคารเพื่อขาย/เช่าซื้อ,Consideration',
+      '2026-07-10,แจ้งซ่อมไฟทางเดิน,"ไฟทางเดินหน้าอาคาร 3 ดับหลายจุด กลางคืนมืดมาก",' + (ch.src[0] || ch.name) + ',Service',
+      '2026-07-11,สอบถามการจอง,"อยากจองบ้านโครงการใหม่ ต้องใช้เอกสารอะไรบ้าง",' + (ch.src[0] || ch.name) + ',Consideration',
     ].join('\r\n');
     const blob = new Blob(['﻿' + example], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
@@ -391,7 +389,6 @@ export default function ImportPage() {
       date: iDate,
       topic: findCol(head, HKEY.topic, used),
       src: findCol(head, HKEY.src, used),
-      prod: findCol(head, HKEY.prod, used),
       jr: findCol(head, HKEY.jr, used),
     });
 
@@ -406,7 +403,7 @@ export default function ImportPage() {
         setScoreCols(saved.score.map(n => idxOfName(info, n)).filter(x => x >= 0));
         setCmap({
           date: idxOfName(info, saved.date), topic: idxOfName(info, saved.topic),
-          src: idxOfName(info, saved.src), prod: idxOfName(info, saved.prod), jr: idxOfName(info, saved.jr),
+          src: idxOfName(info, saved.src), jr: idxOfName(info, saved.jr),
         });
       }
     }
@@ -433,7 +430,7 @@ export default function ImportPage() {
 
     const out: Parsed[] = [];
     body.forEach((r, i) => {
-      const prod = cell(r, cmap.prod), jr = cell(r, cmap.jr);
+      const jr = cell(r, cmap.jr);
       const occurred = cmap.date >= 0 ? normDate(cell(r, cmap.date)) : (autoDates[i] || dFrom);
       // คะแนนความพึงพอใจของผู้ตอบคนนี้ = ค่าเฉลี่ยของทุกคอลัมน์คะแนนที่กรอกไว้
       let score: number | null = null;
@@ -454,7 +451,6 @@ export default function ImportPage() {
           topic: baseTopic || colName.slice(0, 120),
           text,
           source: cell(r, cmap.src),
-          product: PRODUCTS.includes(prod) ? prod : '',   // ค่าที่ไม่ตรงรายการมาตรฐาน → ปล่อยว่าง
           journey: JOURNEYS.includes(jr) ? jr : '',
           score,
           err: '',
@@ -470,7 +466,6 @@ export default function ImportPage() {
   function validateRow(p: Parsed): string {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(p.occurred)) return 'วันที่ต้องเป็น YYYY-MM-DD';
     if (!p.text.trim()) return 'ไม่มีข้อความเสียงลูกค้า';
-    if (p.product && !PRODUCTS.includes(p.product)) return 'กลุ่มผลิตภัณฑ์ไม่ตรง (ปล่อยว่างได้)';
     if (p.journey && !JOURNEYS.includes(p.journey)) return 'Journey ไม่ตรง (ปล่อยว่างได้)';
     return '';
   }
@@ -524,7 +519,6 @@ export default function ImportPage() {
         ref_code: 'VOC-' + stamp + '-' + (i + 1),
         channel_id: chId,
         source: r.source || source,
-        product_group: r.product || null,
         journey_stage: r.journey || ai[i].journey,
         raw_text: r.text,
         topic: r.topic || null,
@@ -569,7 +563,7 @@ export default function ImportPage() {
         text: textCols.map(i => nameOf(cols, i)).filter(Boolean),
         score: scoreCols.map(i => nameOf(cols, i)).filter(Boolean),
         date: nameOf(cols, cmap.date), topic: nameOf(cols, cmap.topic),
-        src: nameOf(cols, cmap.src), prod: nameOf(cols, cmap.prod), jr: nameOf(cols, cmap.jr),
+        src: nameOf(cols, cmap.src), jr: nameOf(cols, cmap.jr),
       });
 
       // บันทึกประวัติการอัปโหลด (ไม่ให้ error ตรงนี้ทำให้การนำเข้าล้ม)
@@ -756,7 +750,6 @@ export default function ImportPage() {
                 ['date', 'วันที่เกิดเรื่อง'],
                 ['topic', 'หัวข้อ/ประเด็น'],
                 ['src', 'แหล่งที่มา'],
-                ['prod', 'กลุ่มผลิตภัณฑ์'],
                 ['jr', 'Journey'],
               ] as const).map(([k, label]) => (
                 <label key={k} className="imp-field">
