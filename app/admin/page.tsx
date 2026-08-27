@@ -1,9 +1,10 @@
 'use client';
 // จัดการระบบ (Admin Console) — เฉพาะบทบาทแอดมิน
-// 1) ผู้ใช้งานและบทบาท (เปลี่ยนบทบาทได้) 2) การเชื่อมต่อ 8 ช่องทาง 3) Data Mapping & Dictionary
+// 1) ผู้ใช้งานและบทบาท (เปลี่ยนบทบาทได้) 2) การเชื่อมต่อ 8 ช่องทาง 3) ตั้งค่า/ทดสอบ LLM 4) Data Mapping & Dictionary
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { DEPT_GROUPS } from '../../lib/data';
+import { pingLLM, LlmPing } from '../../lib/ai';
 
 const ROLE_TH: Record<string, string> = { pending: 'รออนุมัติ', admin: 'แอดมิน', operator: 'ผู้ปฏิบัติงาน', executive: 'ผู้บริหาร' };
 const ROLE_RIGHT: Record<string, string> = {
@@ -29,7 +30,6 @@ const MAPPING = [
   ['หัวข้อ/ประเด็น', 'topic', 'ไม่บังคับ'],
   ['ช่องทาง', 'channel_id', 'social / web / sales / hq / branch / call / complain / survey'],
   ['แหล่งที่มาในช่องทาง', 'source', 'เช่น Facebook, Line OA, Website'],
-  ['กลุ่มผลิตภัณฑ์', 'product_group', 'อาคารเพื่อขาย/เช่าซื้อ · อาคารเช่า · เช่าจัดประโยชน์'],
   ['โครงการ', 'project_id', 'อ้างตาราง project (ชื่อ + ประเภทโครงการ)'],
   ['ผลวิเคราะห์ AI', 'analysis.*', 'sentiment/confidence/หมวด/priority — เจ้าหน้าที่ยืนยันทับได้'],
   ['การส่งต่อ & ติดตาม', 'action_log.*', 'timeline ที่แอดมิน/ผู้ปฏิบัติงานบันทึก'],
@@ -62,7 +62,16 @@ export default function AdminPage() {
   const [cfg, setCfg] = useState<Record<string, ChConfig>>({});
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [llmBusy, setLlmBusy] = useState(false);
+  const [llmPing, setLlmPing] = useState<LlmPing | null>(null);
   const fnBase = (process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://<project>.supabase.co') + '/functions/v1/ingest-voc';
+
+  // ทดสอบว่า Edge Function analyze-voc + คีย์ LLM ใช้งานได้จริง
+  async function testLLM() {
+    setLlmBusy(true); setLlmPing(null);
+    setLlmPing(await pingLLM());
+    setLlmBusy(false);
+  }
 
   useEffect(() => {
     if (!supabase) { setRole('mock'); setUsers(MOCK_USERS as any); return; }
@@ -211,6 +220,39 @@ export default function AdminPage() {
             วิธีใช้: ระบบต้นทางส่ง <code>POST</code> มาที่ endpoint พร้อม header <code>x-voc-secret</code> = secret ของช่องทาง<br />
             รูปแบบข้อมูล: <code>{'{ "channel_id": "call", "text": "ข้อความลูกค้า", "source": "Call Center 1615" }'}</code> หรือ LINE webhook ส่งตรงได้เลย (channel_id = social อัตโนมัติ)<br />
             ดูวิธีเชื่อม LINE OA / Facebook / Google Forms / Email ทีละขั้นในไฟล์ <b>เชื่อมต่อ_API_ช่องทาง.md</b>
+          </div>
+        </div>
+
+        {/* ตั้งค่า AI / LLM */}
+        <div className="card">
+          <h3>🧠 ตั้งค่า AI วิเคราะห์ (LLM จริง)</h3>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.8 }}>
+            ระบบวิเคราะห์เสียงลูกค้าด้วย LLM จริงผ่าน Edge Function <code>analyze-voc</code> — ถ้า LLM ใช้ไม่ได้จะสลับไปใช้ rule-based (keyword) ให้อัตโนมัติ ข้อมูลไม่หาย<br />
+            ตั้ง Secrets ที่ Supabase → Edge Functions → Secrets: <code>LLM_API_KEY</code> (จำเป็น) · <code>LLM_BASE_URL</code> · <code>LLM_MODEL</code>
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="btn" type="button" onClick={testLLM} disabled={llmBusy}>
+              {llmBusy ? 'กำลังทดสอบ…' : '⚡ ทดสอบการเชื่อมต่อ LLM'}
+            </button>
+            {llmPing && (llmPing.ok
+              ? <span style={{ fontSize: 12.5, color: '#15803d' }}>
+                  ✓ เชื่อมต่อได้ · โมเดล <b>{llmPing.model}</b> · ตอบใน {llmPing.latencyMs} ms
+                </span>
+              : <span style={{ fontSize: 12.5, color: '#b91c1c' }}>✗ {llmPing.error}</span>)}
+          </div>
+          {llmPing?.ok && llmPing.sample && (
+            <div style={{ marginTop: 10, background: '#f1f5f9', borderRadius: 8, padding: '9px 11px', fontSize: 12, lineHeight: 1.8 }}>
+              <div style={{ color: 'var(--muted)' }}>ตัวอย่างผลวิเคราะห์ (ข้อความทดสอบ: &ldquo;น้ำประปาไม่ไหลมาสามวันแล้ว รบกวนส่งช่างด่วน&rdquo;)</div>
+              Sentiment: <b>{llmPing.sample.sentiment}</b> ({llmPing.sample.confidence}%) ·
+              ความรุนแรง: <b>{llmPing.sample.priority}</b> ·
+              ฝ่าย: <b>{llmPing.sample.owner}</b><br />
+              หมวด: {llmPing.sample.catProduct} · Journey: {llmPing.sample.journey}<br />
+              เหตุผล: {llmPing.sample.reason}
+            </div>
+          )}
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, lineHeight: 1.7 }}>
+            ใช้ที่ไหนบ้าง: หน้า <b>นำเข้าข้อมูล</b> (ติ๊ก &ldquo;วิเคราะห์ด้วย LLM จริง&rdquo;) · <b>API เรียลไทม์</b> (ingest-voc เรียกให้อัตโนมัติ) · หน้า <b>AI วิเคราะห์</b> (ปุ่มวิเคราะห์ใหม่ด้วย LLM)<br />
+            ต้องรัน <b>supabase_llm_engine.sql</b> ก่อน เพื่อให้ระบบบันทึกได้ว่าแต่ละรายการวิเคราะห์ด้วย LLM หรือ rule · ขั้นตอนละเอียดอยู่ในไฟล์ <b>ตั้งค่า_LLM_วิเคราะห์.md</b>
           </div>
         </div>
 
