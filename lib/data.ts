@@ -11,7 +11,7 @@ export type CaseStatus =
 export interface Voc {
   id: string; ref: string;
   channel: string; source: string;
-  product: string; project: string; projectType: string;
+  project: string; projectType: string;
   journey: string; topic: string; voice: string;
   sentiment: Sentiment; priority: Priority;
   owner: string; status: CaseStatus;
@@ -78,7 +78,6 @@ const MOCK: Voc[] = Array.from({ length: 60 }, (_, i) => {
     source: ch === 'Social Media' ? (Math.floor(i / 8) % 2 ? 'Line OA' : 'Facebook')
       : ch === 'Website / Email / DB' ? ['Website', 'Email', 'Data อื่นๆ'][i % 3]
       : ch,
-    product: pick(['อาคารเพื่อขาย/เช่าซื้อ', 'อาคารเช่า', 'เช่าจัดประโยชน์'], i),
     project: pick(MOCK_PROJECTS, i), projectType: projectTypeOf(pick(MOCK_PROJECTS, i)),
     journey: pick(['Awareness', 'Consideration', 'Purchase', 'Service', 'Loyalty', 'Win Back'], i),
     topic: v.topic, voice: v.voice, sentiment: v.sent, priority: prio,
@@ -99,7 +98,7 @@ function mapRow(r: any): Voc {
   return {
     id: String(r.id), ref: r.ref_code ?? String(r.id),
     channel: chan?.name ?? r.channel_id ?? '', source: r.source ?? '',
-    product: r.product_group ?? '', project: proj?.name ?? '', projectType: proj?.project_type ?? '',
+    project: proj?.name ?? '', projectType: proj?.project_type ?? '',
     journey: r.journey_stage ?? '', topic: r.topic ?? '', voice: r.raw_text ?? '',
     sentiment: (a.sentiment ?? 'Neutral') as Sentiment, priority: (a.priority ?? 'Low') as Priority,
     owner: r.owner_dept ?? '', status: (r.status ?? 'รับเรื่อง') as CaseStatus,
