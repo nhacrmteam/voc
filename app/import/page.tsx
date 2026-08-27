@@ -5,7 +5,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { analyzeText, analyzeSmartBatch, SmartResult } from '../../lib/ai';
+import { analyzeText, analyzeSmartBatch, applyScoreHint, SmartResult } from '../../lib/ai';
 
 // ช่องทาง 8 ช่อง (id ตรงตาราง channel ใน Supabase)
 const CH = [
@@ -122,8 +122,126 @@ function spreadDates(from: string, to: string, n: number): string[] {
     new Date(lo + Math.round((hi - lo) * i / (n - 1))).toISOString().slice(0, 10));
 }
 
-interface ColMap { date: number; text: number; topic: number; src: number; prod: number; jr: number }
-interface Parsed { occurred: string; topic: string; text: string; source: string; product: string; journey: string; err: string }
+// ============================================================
+// ตรวจจับชนิดคอลัมน์จาก "เนื้อหาจริง" ไม่ใช่แค่ชื่อหัวคอลัมน์
+// เพราะ 8 ช่องทางใช้ฟอร์มคนละแบบ หัวคอลัมน์ไม่มีทางตรงกัน
+// ============================================================
+type ColKind = 'text' | 'score' | 'date' | 'choice' | 'number' | 'empty';
+const KIND_TH: Record<ColKind, string> = {
+  text: 'ข้อความบรรยาย', score: 'คะแนน/ระดับ', date: 'วันที่', choice: 'ตัวเลือก', number: 'ตัวเลข', empty: 'ว่าง',
+};
+interface ColInfo {
+  i: number; name: string; kind: ColKind;
+  fill: number;        // สัดส่วนแถวที่มีข้อมูล 0..1
+  avgLen: number;      // ความยาวเฉลี่ย
+  uniqRatio: number;   // ความหลากหลาย (ค่าไม่ซ้ำ / ค่าที่กรอก)
+  rank: number;        // คะแนน "น่าจะเป็นข้อความเสียงลูกค้า"
+  sample: string;
+  scoreMax?: number;   // ถ้าเป็นคะแนนตัวเลข: ค่าสูงสุดที่พบ (ใช้ normalize)
+}
+
+// คำระดับความพึงพอใจแบบไทย → คะแนน 0..1 (เรียงยาวก่อนสั้น เพื่อให้ "มากที่สุด" ชนะ "มาก")
+const SCORE_WORDS: [string, number][] = ([
+  ['มากที่สุด', 1], ['พอใจมากที่สุด', 1], ['ดีมาก', 1], ['ดีเยี่ยม', 1], ['ประทับใจมาก', 1],
+  ['พอใจมาก', 0.85], ['มาก', 0.75], ['ดี', 0.75], ['พอใจ', 0.75],
+  ['ปานกลาง', 0.5], ['พอใช้', 0.5], ['เฉย', 0.5], ['ปกติ', 0.5],
+  ['น้อยที่สุด', 0], ['ไม่พอใจอย่างยิ่ง', 0], ['แย่มาก', 0], ['ไม่พอใจมาก', 0],
+  ['ไม่พอใจ', 0.2], ['น้อย', 0.25], ['แย่', 0.25], ['ควรปรับปรุง', 0.25],
+] as [string, number][]).sort((a, b) => b[0].length - a[0].length);
+function wordScore(v: string): number | null {
+  const t = (v || '').trim();
+  if (!t || t.length > 25) return null;
+  for (const [w, s] of SCORE_WORDS) if (t.includes(w)) return s;
+  return null;
+}
+// ระวัง: Date.parse('1') = ปี 2001 → ตัวเลขเดี่ยว/คะแนนจะถูกมองเป็นวันที่ผิด ๆ
+// จึงบังคับให้ต้องมี "ตัวคั่นวันที่" หรือ "ชื่อเดือน" จริง ๆ เท่านั้น
+const looksDate = (v: string) => {
+  const t = (v || '').trim();
+  if (t.length < 6 || t.length > 30) return false;
+  if (/^\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}/.test(t)) return true;                 // 2026-07-10 · 10/07/2569
+  if (/[A-Za-z]{3,}/.test(t) && !isNaN(Date.parse(t))) return true;            // 19 Aug 2026
+  return /(ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.)/.test(t);
+};
+
+// ชื่อหัวคอลัมน์ช่วยตัดสินว่าตัวเลขนั้นเป็น "คะแนน" หรือแค่ "ตัวเลขทั่วไป"
+const SCORE_NAME = /(พึงพอใจ|ความพอใจ|คะแนน|ระดับ|ประเมิน|satisf|rating|score)/i;
+const ID_NAME = /(ลำดับ|เลขที่|รหัส|^\s*no\.?\s*$|^\s*id\s*$)/i;
+const QTY_NAME = /(จำนวน|อายุ|รายได้|ค่าใช้จ่าย|บุตร|ชั้น|ห้อง|ปี\b|เดือน|บาท)/;
+
+function profileColumns(grid: string[][], headRow: number): ColInfo[] {
+  const head = grid[headRow] || [];
+  const body = grid.slice(headRow + 1);
+  const width = grid.reduce((m, r) => Math.max(m, r.length), 0);
+
+  return Array.from({ length: width }, (_, i) => {
+    const vals = body.map(r => (r[i] ?? '').trim());
+    const nz = vals.filter(v => v !== '');
+    const fill = body.length ? nz.length / body.length : 0;
+    const avgLen = nz.length ? nz.reduce((a, v) => a + v.length, 0) / nz.length : 0;
+    const uniq = new Set(nz).size;
+    const uniqRatio = nz.length ? uniq / nz.length : 0;
+    const nums = nz.map(v => Number(v.replace(/,/g, ''))).filter(n => !isNaN(n));
+    const numRatio = nz.length ? nums.length / nz.length : 0;
+    const dateRatio = nz.length ? nz.filter(looksDate).length / nz.length : 0;
+    const wordRatio = nz.length ? nz.filter(v => wordScore(v) !== null).length / nz.length : 0;
+    // จำนวนคำเฉลี่ย — ใช้แยก "ข้อความบรรยาย" ออกจาก "ชื่อโครงการ/ชื่อจังหวัด" ที่ยาวแต่เป็นคำนามสั้น ๆ
+    const avgWords = nz.length ? nz.reduce((a, v) => a + v.split(/\s+/).filter(Boolean).length, 0) / nz.length : 0;
+    const hName = (head[i] || '').trim();
+    // เลขลำดับ/เลขที่ใบ (1,2,3,…) ต้องไม่ถูกนับเป็นคะแนน ไม่งั้นค่าเฉลี่ยเพี้ยนทั้งไฟล์
+    const isSeq = nums.length === nz.length && nums.length >= 4 && nums.every((n, k) => n === nums[0] + k);
+
+    let kind: ColKind = 'empty';
+    let scoreMax: number | undefined;
+    if (!nz.length) kind = 'empty';
+    else if (dateRatio > 0.7) kind = 'date';
+    else if (wordRatio > 0.7 && uniq <= 8) kind = 'score';   // มากที่สุด/มาก/ปานกลาง/น้อย…
+    else if (
+      numRatio > 0.9 && !isSeq && !ID_NAME.test(hName) && !QTY_NAME.test(hName) &&
+      uniq <= 11 && Math.max(...nums) <= 10 && Math.min(...nums) >= 0 &&
+      (SCORE_NAME.test(hName) || uniqRatio < 0.5)               // ชื่อบ่งชี้ว่าเป็นคะแนน หรือค่าซ้ำกันมาก
+    ) { kind = 'score'; scoreMax = Math.max(...nums) || 5; }
+    else if (numRatio > 0.9) kind = 'number';
+    // ข้อความบรรยาย = ยาวพอ + ไม่ซ้ำเดิม ๆ + (หลายคำ หรือ ยาวมากพอแบบภาษาไทยที่ไม่เว้นวรรค)
+    else if (avgLen >= 15 && uniqRatio > 0.5 && (avgWords >= 3.5 || avgLen >= 30)) kind = 'text';
+    else kind = 'choice';
+
+    // คะแนน "น่าจะเป็นข้อความเสียงลูกค้า": ยาว + หลากหลาย + มีคนกรอกจริง
+    const rank = kind === 'text' ? Math.min(avgLen, 200) * uniqRatio * Math.max(fill, 0.15) : 0;
+    return { i, name: (head[i] || '').trim(), kind, fill, avgLen, uniqRatio, rank, sample: nz[0] || '', scoreMax };
+  });
+}
+
+// ---------- จำการจับคู่คอลัมน์ต่อช่องทาง (ไฟล์รอบหน้าของแหล่งเดิมจับคู่ให้เอง) ----------
+// เก็บเป็น "ชื่อหัวคอลัมน์" ไม่ใช่ตำแหน่ง — สลับลำดับคอลัมน์แล้วยังจำได้
+interface SavedMap { text: string[]; score: string[]; date: string; topic: string; src: string; prod: string; jr: string }
+const MAP_KEY = 'voc-colmap-';
+function loadSavedMap(chId: string): SavedMap | null {
+  try { const s = localStorage.getItem(MAP_KEY + chId); return s ? JSON.parse(s) as SavedMap : null; } catch { return null; }
+}
+function saveMap(chId: string, m: SavedMap) {
+  try { localStorage.setItem(MAP_KEY + chId, JSON.stringify(m)); } catch { /* โหมดส่วนตัว/พื้นที่เต็ม — ข้าม */ }
+}
+const nameOf = (cols: ColInfo[], i: number) => (i >= 0 ? (cols[i]?.name || '') : '');
+const idxOfName = (cols: ColInfo[], name: string) =>
+  name ? cols.findIndex(c => c.name && c.name === name) : -1;
+
+// ค่าคะแนนของเซลล์ → 0..1
+function cellScore(v: string, info: ColInfo): number | null {
+  const t = (v || '').trim();
+  if (!t) return null;
+  const w = wordScore(t);
+  if (w !== null) return w;
+  const n = Number(t.replace(/,/g, ''));
+  if (!isNaN(n) && info.scoreMax) {
+    if (info.scoreMax <= 1) return Math.max(0, Math.min(1, n));
+    return Math.max(0, Math.min(1, (n - 1) / (info.scoreMax - 1)));   // 1..max → 0..1
+  }
+  return null;
+}
+
+interface ColMap { date: number; topic: number; src: number; prod: number; jr: number }
+interface Parsed { occurred: string; topic: string; text: string; source: string; product: string; journey: string; score: number | null; err: string }
 
 const inp: React.CSSProperties = { padding: '9px 11px', border: '1px solid #dfe6f0', borderRadius: 8, fontSize: 13.5, fontFamily: 'inherit', background: '#fff' };
 const cellInp: React.CSSProperties = { padding: '5px 7px', border: '1px solid var(--line)', borderRadius: 6, fontSize: 12.5, fontFamily: 'inherit', background: 'var(--card,#fff)', color: 'inherit' };
@@ -143,7 +261,11 @@ export default function ImportPage() {
   // ตารางดิบจากไฟล์ + การจับคู่คอลัมน์ (ผู้ใช้แก้เองได้) + ช่วงวันที่กรณีไฟล์ไม่มีคอลัมน์วันที่
   const [grid, setGrid] = useState<string[][]>([]);
   const [headRow, setHeadRow] = useState(0);
-  const [cmap, setCmap] = useState<ColMap>({ date: -1, text: -1, topic: -1, src: -1, prod: -1, jr: -1 });
+  const [cols, setCols] = useState<ColInfo[]>([]);          // ผลตรวจจับชนิดคอลัมน์
+  const [textCols, setTextCols] = useState<number[]>([]);   // คอลัมน์ข้อความ (เลือกได้หลายช่อง → แยกเป็นหลายเสียง)
+  const [scoreCols, setScoreCols] = useState<number[]>([]); // คอลัมน์คะแนนความพึงพอใจ
+  const [useScore, setUseScore] = useState(true);
+  const [cmap, setCmap] = useState<ColMap>({ date: -1, topic: -1, src: -1, prod: -1, jr: -1 });
   const [dFrom, setDFrom] = useState('');
   const [dTo, setDTo] = useState('');
   const [fyLabel, setFyLabel] = useState('');
@@ -230,47 +352,106 @@ export default function ImportPage() {
       if (score > best) { best = score; hr = i; }
     }
     const head = g[hr];
-    const iDate = findCol(head, HKEY.date);
-    const iText = findCol(head, HKEY.text, iDate >= 0 ? [iDate] : []);
-    const used = [iDate, iText].filter(x => x >= 0);
-    setGrid(g);
-    setHeadRow(hr);
+    const info = profileColumns(g, hr);
+    setGrid(g); setHeadRow(hr); setCols(info);
+
+    // --- คอลัมน์วันที่: เชื่อ "เนื้อหา" ก่อน ถ้าไม่มีค่อยดูชื่อหัวคอลัมน์ ---
+    const byContentDate = info.filter(c => c.kind === 'date').sort((a, b) => b.fill - a.fill)[0];
+    const byNameDate = findCol(head, HKEY.date);
+    const iDate = byContentDate ? byContentDate.i : (info[byNameDate]?.kind === 'date' ? byNameDate : byNameDate);
+
+    // --- คอลัมน์ข้อความ: เลือกทุกคอลัมน์ที่เป็น "ข้อความบรรยาย" จริง (เรียงตามคะแนน สูงสุด 6 ช่อง) ---
+    const auto = info
+      .filter(c => c.kind === 'text' && c.i !== iDate && c.avgLen >= 15 && c.fill >= 0.05)
+      .sort((a, b) => b.rank - a.rank)
+      .slice(0, 6)
+      .map(c => c.i)
+      .sort((a, b) => a - b);
+    // เผื่อไฟล์เทมเพลตปกติที่ข้อความสั้น — ใช้ชื่อหัวคอลัมน์ช่วย
+    const byName = findCol(head, HKEY.text, iDate >= 0 ? [iDate] : []);
+    const picked = auto.length ? auto : (byName >= 0 ? [byName] : []);
+
+    const scores = info.filter(c => c.kind === 'score').map(c => c.i);
+    const used = [iDate, ...picked].filter(x => x >= 0);
+    setTextCols(picked);
+    setScoreCols(scores);
     setCmap({
-      date: iDate, text: iText,
+      date: iDate,
       topic: findCol(head, HKEY.topic, used),
       src: findCol(head, HKEY.src, used),
       prod: findCol(head, HKEY.prod, used),
       jr: findCol(head, HKEY.jr, used),
     });
+
+    // ถ้าเคยจับคู่ช่องทางนี้ไว้แล้วและชื่อคอลัมน์ตรงกัน → ใช้ของเดิมทับผลตรวจจับ
+    const saved = loadSavedMap(chId);
+    let restored = false;
+    if (saved) {
+      const t = saved.text.map(n => idxOfName(info, n)).filter(x => x >= 0);
+      if (t.length) {
+        restored = true;
+        setTextCols(t.sort((a, b) => a - b));
+        setScoreCols(saved.score.map(n => idxOfName(info, n)).filter(x => x >= 0));
+        setCmap({
+          date: idxOfName(info, saved.date), topic: idxOfName(info, saved.topic),
+          src: idxOfName(info, saved.src), prod: idxOfName(info, saved.prod), jr: idxOfName(info, saved.jr),
+        });
+      }
+    }
+
     setErr('');
-    setMsg(iText >= 0
-      ? 'อ่านไฟล์สำเร็จ — ตรวจการจับคู่คอลัมน์ด้านล่างให้ถูกต้องก่อนบันทึก'
-      : 'อ่านไฟล์สำเร็จ แต่หา "ข้อความเสียงลูกค้า" อัตโนมัติไม่เจอ — เลือกคอลัมน์เองในการ์ดจับคู่คอลัมน์ด้านล่าง');
+    setMsg(restored
+      ? 'ใช้การจับคู่คอลัมน์ที่เคยบันทึกไว้ของช่องทาง "' + ch.name + '" — แก้ได้ด้านล่าง'
+      : picked.length
+      ? 'ตรวจจับอัตโนมัติสำเร็จ — พบคอลัมน์ข้อความ ' + picked.length + ' ช่อง' +
+        (scores.length ? ' · คอลัมน์คะแนนความพึงพอใจ ' + scores.length + ' ช่อง' : '') +
+        ' · ตรวจความถูกต้องด้านล่างก่อนบันทึก'
+      : 'อ่านไฟล์สำเร็จ แต่ยังไม่พบคอลัมน์ที่เป็นข้อความบรรยาย — เลือกเองในการ์ดด้านล่าง');
   }
 
   // สร้างรายการที่จะบันทึกจาก grid + การจับคู่คอลัมน์ + ช่วงวันที่ (คำนวณใหม่ทุกครั้งที่ผู้ใช้เปลี่ยนค่า)
   useEffect(() => {
-    if (!grid.length || cmap.text < 0) { setRows([]); return; }
+    if (!grid.length || !textCols.length) { setRows([]); return; }
     const cell = (r: string[], i: number) => (i >= 0 ? (r[i] ?? '').trim() : '');
-    const body = grid.slice(headRow + 1).filter(r => cell(r, cmap.text) !== '' || cell(r, cmap.date) !== '');
-    // ไม่มีคอลัมน์วันที่ (เช่น แบบสอบถามกระดาษ) → กระจายวันที่เท่า ๆ กันในช่วงที่เลือก
-    const auto = cmap.date < 0 ? spreadDates(dFrom, dTo, body.length) : [];
-    const out: Parsed[] = body.map((r, i) => {
+    // เก็บเฉพาะแถวที่มีข้อความอย่างน้อย 1 ช่อง (ตัดแถวว่าง/แถวรวมยอดท้ายไฟล์)
+    const body = grid.slice(headRow + 1).filter(r => textCols.some(c => cell(r, c) !== ''));
+    // ไม่มีคอลัมน์วันที่ (เช่น แบบสอบถามกระดาษ) → กระจายวันที่เท่า ๆ กันในช่วงที่เลือก (ต่อ "ผู้ตอบ" 1 คน)
+    const autoDates = cmap.date < 0 ? spreadDates(dFrom, dTo, body.length) : [];
+
+    const out: Parsed[] = [];
+    body.forEach((r, i) => {
       const prod = cell(r, cmap.prod), jr = cell(r, cmap.jr);
-      const p: Parsed = {
-        occurred: cmap.date >= 0 ? normDate(cell(r, cmap.date)) : (auto[i] || dFrom),
-        topic: cell(r, cmap.topic),
-        text: cell(r, cmap.text),
-        source: cell(r, cmap.src),
-        product: PRODUCTS.includes(prod) ? prod : '',      // ค่าที่ไม่ตรงรายการมาตรฐาน → ปล่อยว่าง
-        journey: JOURNEYS.includes(jr) ? jr : '',
-        err: '',
-      };
-      p.err = validateRow(p);
-      return p;
+      const occurred = cmap.date >= 0 ? normDate(cell(r, cmap.date)) : (autoDates[i] || dFrom);
+      // คะแนนความพึงพอใจของผู้ตอบคนนี้ = ค่าเฉลี่ยของทุกคอลัมน์คะแนนที่กรอกไว้
+      let score: number | null = null;
+      if (useScore && scoreCols.length) {
+        const vs = scoreCols
+          .map(c => cellScore(cell(r, c), cols[c]))
+          .filter((v): v is number => v !== null);
+        if (vs.length) score = vs.reduce((a, b) => a + b, 0) / vs.length;
+      }
+      const baseTopic = cell(r, cmap.topic);
+      // แต่ละคอลัมน์ข้อความที่กรอก = 1 รายการ VOC (หัวข้อ = ชื่อคอลัมน์นั้น)
+      textCols.forEach(c => {
+        const text = cell(r, c);
+        if (!text) return;
+        const colName = (cols[c]?.name || '').trim();
+        const p: Parsed = {
+          occurred,
+          topic: baseTopic || colName.slice(0, 120),
+          text,
+          source: cell(r, cmap.src),
+          product: PRODUCTS.includes(prod) ? prod : '',   // ค่าที่ไม่ตรงรายการมาตรฐาน → ปล่อยว่าง
+          journey: JOURNEYS.includes(jr) ? jr : '',
+          score,
+          err: '',
+        };
+        p.err = validateRow(p);
+        out.push(p);
+      });
     });
     setRows(out);
-  }, [grid, headRow, cmap, dFrom, dTo]);
+  }, [grid, headRow, cols, textCols, scoreCols, useScore, cmap, dFrom, dTo]);
 
   // ตรวจสอบความถูกต้องต่อแถว (ใช้ทั้งตอนอ่านไฟล์และตอนแก้ไข)
   function validateRow(p: Parsed): string {
@@ -323,6 +504,9 @@ export default function ImportPage() {
       } else {
         ai = ok.map(r => ({ ...analyzeText((r.topic ? r.topic + ' ' : '') + r.text, chId), via: 'rule' as const }));
       }
+      // เสริมด้วยคะแนนความพึงพอใจจากแบบประเมิน (ถ้ามี) — ช่วยตัดสินเมื่อข้อความสั้น/กำกวม
+      ai = ai.map((a, i) => applyScoreHint(a, ok[i].score, ok[i].text));
+      const scored = ok.filter(r => r.score !== null).length;
       const payload = ok.map((r, i) => ({
         ref_code: 'VOC-' + stamp + '-' + (i + 1),
         channel_id: chId,
@@ -367,6 +551,14 @@ export default function ImportPage() {
           }
         }
       }
+      // จำการจับคู่คอลัมน์ของช่องทางนี้ไว้ใช้รอบหน้า
+      saveMap(chId, {
+        text: textCols.map(i => nameOf(cols, i)).filter(Boolean),
+        score: scoreCols.map(i => nameOf(cols, i)).filter(Boolean),
+        date: nameOf(cols, cmap.date), topic: nameOf(cols, cmap.topic),
+        src: nameOf(cols, cmap.src), prod: nameOf(cols, cmap.prod), jr: nameOf(cols, cmap.jr),
+      });
+
       // บันทึกประวัติการอัปโหลด (ไม่ให้ error ตรงนี้ทำให้การนำเข้าล้ม)
       try {
         await supabase.from('upload_log').insert({
@@ -381,8 +573,9 @@ export default function ImportPage() {
               ? ' · วิเคราะห์ด้วย LLM ทั้งหมด' + (model ? ' (' + model + ')' : '')
               : ' · LLM ' + llmCount + ' แถว, rule-based ' + (ok.length - llmCount) + ' แถว (LLM ใช้ไม่ได้บางส่วน)')
           : ' · วิเคราะห์แบบ rule-based') +
+        (scored ? ' · ใช้คะแนนแบบประเมินช่วยตัดสิน ' + scored + ' รายการ' : '') +
         ' — ดูได้ในเมนูรายการ VOC');
-      setRows([]); setFileName(''); setGrid([]);
+      setRows([]); setFileName(''); setGrid([]); setCols([]); setTextCols([]); setScoreCols([]);
     } catch (e: any) {
       setErr('นำเข้าไม่สำเร็จ: ' + (e.message || String(e)));
     }
@@ -447,9 +640,43 @@ export default function ImportPage() {
         {/* ขั้น 3: จับคู่คอลัมน์ */}
         {grid.length > 0 && (
           <div className="card">
-            <h3>3️⃣ จับคู่คอลัมน์ — บอกระบบว่าคอลัมน์ไหนคืออะไร</h3>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
-              ระบบเดาให้แล้วจากหัวตาราง · แก้ได้ถ้าไม่ถูก — ไฟล์แบบสอบถามที่คอลัมน์เป็นคำถามข้อ 1, 2, 3… ต้องเลือกเองว่าข้อไหนคือ &ldquo;ข้อความเสียงลูกค้า&rdquo;
+            <h3>3️⃣ ตรวจจับคอลัมน์อัตโนมัติ — ตรวจความถูกต้องก่อนบันทึก</h3>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+              ระบบอ่าน<b>เนื้อหาจริง</b>ในทุกคอลัมน์แล้วเดาให้ว่าอันไหนเป็นข้อความบรรยาย / คะแนน / วันที่ — ไม่ต้องพึ่งชื่อหัวคอลัมน์
+              จึงรองรับฟอร์มที่ต่างกันของทั้ง 8 ช่องทางได้ · ติ๊กเพิ่ม/เอาออกได้เอง
+            </div>
+
+            {/* ตารางผลตรวจจับ + เลือกคอลัมน์ข้อความ (หลายช่องได้ → แยกเป็นหลายเสียง) */}
+            <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>
+              🗣️ คอลัมน์ที่จะนำไปวิเคราะห์ ({textCols.length} ช่อง → {rows.length.toLocaleString()} รายการ)
+            </div>
+            <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid var(--line)', borderRadius: 10, marginBottom: 12 }}>
+              <table style={{ fontSize: 12 }}>
+                <thead><tr>
+                  <th style={{ width: 40 }}>ใช้</th><th>คอลัมน์</th><th style={{ width: 92 }}>ระบบมองเป็น</th>
+                  <th style={{ width: 62 }}>กรอก</th><th style={{ width: 66 }}>ยาวเฉลี่ย</th><th>ตัวอย่าง</th>
+                </tr></thead>
+                <tbody>{cols.filter(c => c.kind !== 'empty').map(c => {
+                  const on = textCols.includes(c.i);
+                  return (
+                    <tr key={c.i} style={on ? { background: 'rgba(46,108,240,.07)' } : undefined}>
+                      <td>
+                        <input type="checkbox" checked={on} onChange={() =>
+                          setTextCols(v => (on ? v.filter(x => x !== c.i) : [...v, c.i].sort((a, b) => a - b)))} />
+                      </td>
+                      <td>{(c.i + 1)}. {c.name || <i style={{ color: 'var(--muted)' }}>(ไม่มีชื่อ)</i>}</td>
+                      <td><span style={{
+                        fontSize: 11, padding: '1px 7px', borderRadius: 20,
+                        background: c.kind === 'text' ? '#dbeafe' : c.kind === 'score' ? '#fef3c7' : c.kind === 'date' ? '#dcfce7' : '#f1f5f9',
+                        color: '#334155',
+                      }}>{KIND_TH[c.kind]}</span></td>
+                      <td>{Math.round(c.fill * 100)}%</td>
+                      <td>{Math.round(c.avgLen)}</td>
+                      <td style={{ color: 'var(--muted)' }}>{c.sample.slice(0, 60)}</td>
+                    </tr>
+                  );
+                })}</tbody>
+              </table>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 12 }}>
@@ -463,15 +690,14 @@ export default function ImportPage() {
               </label>
 
               {([
-                ['text', 'ข้อความเสียงลูกค้า *', true],
-                ['date', 'วันที่เกิดเรื่อง', false],
-                ['topic', 'หัวข้อ/ประเด็น', false],
-                ['src', 'แหล่งที่มา', false],
-                ['prod', 'กลุ่มผลิตภัณฑ์', false],
-                ['jr', 'Journey', false],
-              ] as const).map(([k, label, req]) => (
+                ['date', 'วันที่เกิดเรื่อง'],
+                ['topic', 'หัวข้อ/ประเด็น'],
+                ['src', 'แหล่งที่มา'],
+                ['prod', 'กลุ่มผลิตภัณฑ์'],
+                ['jr', 'Journey'],
+              ] as const).map(([k, label]) => (
                 <label key={k} style={{ fontSize: 12.5 }}>
-                  <div style={{ marginBottom: 4, color: req ? 'var(--red)' : 'var(--muted)' }}>{label}</div>
+                  <div style={{ marginBottom: 4, color: 'var(--muted)' }}>{label}</div>
                   <select style={{ ...inp, width: '100%' }} value={cmap[k]}
                     onChange={e => setCmap(m => ({ ...m, [k]: +e.target.value }))}>
                     <option value={-1}>{k === 'date' ? '— ไม่มีในไฟล์ (ให้ระบบเติมให้) —' : '— ไม่ใช้ —'}</option>
@@ -480,6 +706,21 @@ export default function ImportPage() {
                 </label>
               ))}
             </div>
+
+            {/* คะแนนความพึงพอใจ → ช่วยตัดสิน sentiment */}
+            {scoreCols.length > 0 && (
+              <div style={{ marginTop: 14, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '11px 13px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={useScore} onChange={e => setUseScore(e.target.checked)} />
+                  ⭐ ใช้คะแนนความพึงพอใจ {scoreCols.length} คอลัมน์ ช่วยตัดสิน Sentiment
+                </label>
+                <div style={{ fontSize: 11.5, color: '#92400e', marginTop: 7, lineHeight: 1.75 }}>
+                  คอลัมน์: {scoreCols.map(i => (cols[i]?.name || 'คอลัมน์ ' + (i + 1)).slice(0, 28)).join(' · ')}<br />
+                  คะแนนสูง → เชิงบวก · คะแนนต่ำ → เชิงลบ · ใช้เมื่อข้อความสั้นหรือกำกวม ถ้าข้อความชัดเจนแต่ขัดกับคะแนน
+                  ระบบจะส่งเข้าคิวให้เจ้าหน้าที่ยืนยันแทน
+                </div>
+              </div>
+            )}
 
             {/* ไม่มีคอลัมน์วันที่ → ให้ระบุช่วงแล้วกระจายเท่า ๆ กัน */}
             {cmap.date < 0 && (
@@ -501,18 +742,19 @@ export default function ImportPage() {
               </div>
             )}
 
-            {cmap.text < 0 && (
+            {!textCols.length && (
               <div style={{ fontSize: 12.5, color: '#b91c1c', marginTop: 12 }}>
-                ⚠ ต้องเลือกคอลัมน์ &ldquo;ข้อความเสียงลูกค้า&rdquo; ก่อน จึงจะแสดงตารางตรวจสอบและบันทึกได้
+                ⚠ ติ๊กเลือกอย่างน้อย 1 คอลัมน์ในตารางด้านบน จึงจะแสดงตารางตรวจสอบและบันทึกได้
               </div>
             )}
 
-            {/* ตัวอย่างข้อมูล 3 แถวแรกของคอลัมน์ที่เลือก — ช่วยยืนยันว่าเลือกถูก */}
-            {cmap.text >= 0 && (
+            {textCols.length > 0 && (
               <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12, lineHeight: 1.8 }}>
-                ตัวอย่างข้อความที่เลือก:
-                {grid.slice(headRow + 1, headRow + 4).map((r, i) => (
-                  <div key={i} style={{ color: 'inherit' }}>• {(r[cmap.text] || '(ว่าง)').slice(0, 110)}</div>
+                ตัวอย่างที่จะบันทึก (3 รายการแรก):
+                {rows.slice(0, 3).map((r, i) => (
+                  <div key={i}>• <b>{r.topic.slice(0, 40) || '(ไม่มีหัวข้อ)'}</b> — {r.text.slice(0, 90)}
+                    {r.score !== null && <span style={{ color: '#92400e' }}> · คะแนน {Math.round(r.score * 100)}%</span>}
+                  </div>
                 ))}
               </div>
             )}
