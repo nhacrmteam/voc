@@ -54,6 +54,115 @@ html[data-theme="dark"] .main svg,
 html[data-theme="dark"] .main .pill,
 html[data-theme="dark"] .main .tag{filter:invert(1) hue-rotate(180deg)}
 
+/* ============================================================
+   หน้านำเข้าข้อมูล — Wizard สไตล์มินิมอล
+   หมายเหตุดาร์กโหมด: .main ทั้งหน้าถูก invert อยู่ การ invert ซ้ำที่ .imp
+   จะ "หักล้างกัน" → ข้างในนี้จึงเขียนสีดาร์กจริงได้ตรง ๆ ผ่านตัวแปร --i*
+   ============================================================ */
+.imp{--ic:#fff;--is:#f8fafc;--il:#e6ebf3;--it:#0f172a;--im:#6b7a90;--ia:#2e6cf0;--iok:#16a34a;--ibad:#dc2626}
+
+/* --- แถบขั้นตอน --- */
+.imp-steps{display:flex;align-items:center;margin-bottom:20px;overflow-x:auto;padding-bottom:2px}
+.imp-step{display:flex;align-items:center;gap:9px;flex:0 0 auto;background:none;border:none;padding:0;font-family:inherit;cursor:pointer}
+.imp-step:disabled{cursor:default}
+.imp-dot{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:700;background:var(--is);color:var(--im);border:1.5px solid var(--il);transition:.2s}
+.imp-step.on .imp-dot{background:var(--ia);color:#fff;border-color:var(--ia);box-shadow:0 0 0 4px rgba(46,108,240,.16)}
+.imp-step.done .imp-dot{background:#dcfce7;color:#15803d;border-color:#bbf7d0}
+.imp-step .lb{font-size:12.5px;color:var(--im);font-weight:500;white-space:nowrap}
+.imp-step.on .lb{color:var(--it);font-weight:700}
+.imp-line{flex:1 1 auto;height:1.5px;background:var(--il);margin:0 12px;min-width:16px}
+.imp-line.done{background:#bbf7d0}
+
+/* --- แผงเนื้อหา --- */
+.imp-panel{background:var(--ic);border:1px solid var(--il);border-radius:16px;padding:22px 24px;color:var(--it)}
+.imp-h{font-size:16px;font-weight:700;margin-bottom:5px}
+.imp-sub{font-size:12.5px;color:var(--im);margin-bottom:18px;line-height:1.75}
+.imp-note{font-size:12px;color:var(--im);line-height:1.75}
+
+/* --- ช่องลากไฟล์มาวาง --- */
+.imp-drop{border:2px dashed var(--il);border-radius:14px;padding:46px 20px;text-align:center;cursor:pointer;transition:.18s;background:var(--is)}
+.imp-drop:hover{border-color:var(--ia)}
+.imp-drop.over{border-color:var(--ia);background:rgba(46,108,240,.1)}
+.imp-drop .ic{font-size:38px;line-height:1}
+.imp-drop .t1{font-weight:700;font-size:14.5px;margin-top:12px}
+.imp-drop .t2{font-size:12.5px;color:var(--im);margin-top:5px}
+.imp-file{display:flex;align-items:center;gap:12px;background:var(--is);border:1px solid var(--il);border-radius:12px;padding:12px 15px;margin-top:14px;font-size:13px}
+
+/* --- ฟอร์ม --- */
+.imp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.imp-field{display:block;font-size:12.5px}
+.imp-field>span{display:block;margin-bottom:6px;color:var(--im);font-weight:500}
+.imp select,.imp input[type=date]{width:100%;font-family:inherit;font-size:13.5px;padding:9px 11px;border:1px solid var(--il);border-radius:10px;background:var(--ic);color:var(--it)}
+.imp select:focus,.imp input:focus{outline:none;border-color:var(--ia)}
+
+/* --- สรุปตัวเลข --- */
+.imp-stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.imp-chip{background:var(--is);border:1px solid var(--il);border-radius:12px;padding:10px 15px;min-width:112px}
+.imp-chip .n{font-size:20px;font-weight:700;line-height:1.25}
+.imp-chip .l{font-size:11px;color:var(--im)}
+
+/* --- ปุ่ม --- */
+.imp-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:22px;padding-top:16px;border-top:1px solid var(--il)}
+.imp-btn{border:1px solid var(--il);background:var(--ic);color:var(--it);border-radius:10px;padding:9px 18px;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s}
+.imp-btn:hover:not(:disabled){border-color:var(--ia);color:var(--ia)}
+.imp-btn.pri{background:var(--ia);border-color:var(--ia);color:#fff}
+.imp-btn.pri:hover:not(:disabled){filter:brightness(1.1);color:#fff}
+.imp-btn:disabled{opacity:.42;cursor:not-allowed}
+
+/* --- การ์ดเลือกวิธีนำเข้า --- */
+.imp-ways{display:grid;grid-template-columns:repeat(auto-fit,minmax(186px,1fr));gap:10px;margin-bottom:20px}
+.imp-way{background:var(--ic);border:1px solid var(--il);border-radius:14px;padding:14px 15px;cursor:pointer;transition:.16s;text-align:left;font-family:inherit;color:var(--it)}
+.imp-way:hover{border-color:var(--ia);transform:translateY(-2px)}
+.imp-way.on{border-color:var(--ia);background:rgba(46,108,240,.06);box-shadow:0 0 0 3px rgba(46,108,240,.12)}
+.imp-way .ic{font-size:19px}
+.imp-way .nm{font-weight:700;font-size:13.5px;margin-top:6px}
+.imp-way .ds{font-size:11.5px;color:var(--im);margin-top:2px}
+
+/* --- ตาราง/แถบข้อความในหน้านี้ --- */
+.imp table th,.imp table td{border-bottom:1px solid var(--il)}
+.imp table th{color:var(--im)}
+.imp tbody tr:hover{background:var(--is)}
+.imp-box{border:1px solid var(--il);border-radius:12px;overflow:auto}
+.imp .kind{display:inline-block;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.imp .k-text{background:#dbeafe;color:#1d4ed8}
+.imp .k-score{background:#fef3c7;color:#92400e}
+.imp .k-date{background:#dcfce7;color:#15803d}
+.imp .k-choice{background:#f1f5f9;color:#475569}
+.imp .k-number{background:#ede9fe;color:#6d28d9}
+.imp .k-empty{background:#f1f5f9;color:#94a3b8}
+.imp-alert{border-radius:12px;padding:11px 14px;font-size:12.5px;line-height:1.7;margin-top:14px}
+.imp-alert.ok{background:rgba(22,163,74,.1);color:#15803d}
+.imp-alert.bad{background:rgba(220,38,38,.1);color:#b91c1c}
+.imp-alert.info{background:var(--is);color:var(--it)}
+.imp-alert.warn{background:rgba(245,158,11,.12);color:#92400e}
+
+/* --- ดาร์กโหมด --- */
+html[data-theme="dark"] .main .imp{
+  filter:invert(1) hue-rotate(180deg);
+  --ic:#121c30;--is:#0d1524;--il:#27354f;--it:#e8eef8;--im:#94a4be;--ia:#5b8cff
+}
+html[data-theme="dark"] .main .imp img,html[data-theme="dark"] .main .imp svg{filter:none}
+html[data-theme="dark"] .main .imp .imp-step.done .imp-dot{background:#13352a;color:#4ade80;border-color:#1f5b41}
+html[data-theme="dark"] .main .imp .imp-line.done{background:#1f5b41}
+html[data-theme="dark"] .main .imp .imp-alert.ok{background:rgba(34,197,94,.14);color:#5ee08b}
+html[data-theme="dark"] .main .imp .imp-alert.bad{background:rgba(248,113,113,.14);color:#fca5a5}
+html[data-theme="dark"] .main .imp .imp-alert.warn{background:rgba(251,191,36,.14);color:#fcd34d}
+html[data-theme="dark"] .main .imp .k-text{background:#17305c;color:#93b8ff}
+html[data-theme="dark"] .main .imp .k-score{background:#3d2f10;color:#fcd34d}
+html[data-theme="dark"] .main .imp .k-date{background:#12352a;color:#6ee7a8}
+html[data-theme="dark"] .main .imp .k-choice{background:#1e293b;color:#a3b3cc}
+html[data-theme="dark"] .main .imp .k-number{background:#2c2450;color:#c4b5fd}
+html[data-theme="dark"] .main .imp .k-empty{background:#1e293b;color:#64748b}
+
+@media(max-width:640px){
+  .imp-panel{padding:17px 15px}
+  .imp-step .lb{display:none}
+  .imp-line{margin:0 7px}
+  .imp-drop{padding:32px 14px}
+  .imp-foot{flex-direction:column-reverse;align-items:stretch}
+  .imp-btn{width:100%}
+}
+
 /* ===== Responsive: แทปเลท ===== */
 @media(max-width:900px){
   .side{width:auto;height:auto;position:static;flex-direction:column}
