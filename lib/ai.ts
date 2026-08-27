@@ -108,6 +108,39 @@ export function aiPriority(s: AiSent, text: string): Priority {
   return 'Low';
 }
 
+// ---------- คะแนนความพึงพอใจจากแบบประเมิน → ช่วยตัดสิน sentiment ----------
+// score = 0..1 (normalize มาแล้วจากหน้านำเข้า) · ใช้เมื่อข้อความสั้น/กำกวม เพราะคะแนนตรงกว่า
+export function scoreToSentiment(score: number): Sentiment {
+  if (score >= 0.7) return 'Positive';
+  if (score <= 0.4) return 'Negative';
+  return 'Neutral';
+}
+export function applyScoreHint<T extends AiResult>(r: T, score: number | null | undefined, text: string): T {
+  if (score == null || isNaN(score)) return r;
+  const s = scoreToSentiment(score);
+  const pct = Math.round(score * 100);
+  const short = (text || '').trim().length < 12;
+  // ข้อความสั้น/ว่าง หรือ AI ไม่มั่นใจ → เชื่อคะแนนแบบประเมิน
+  if (short || r.uncertain || r.conf <= 55) {
+    const merged = { ...r, sentiment: s, conf: Math.max(r.conf, 80), uncertain: false };
+    return {
+      ...merged,
+      reason: 'ตัดสินจากคะแนนความพึงพอใจในแบบประเมิน (' + pct + '%)' + (short ? ' — ไม่มีข้อความบรรยาย' : ' — ข้อความมีสัญญาณกำกวม'),
+      priority: aiPriority(merged, text),
+    };
+  }
+  // ข้อความกับคะแนนขัดกันชัดเจน → ส่งให้เจ้าหน้าที่ยืนยัน
+  const polar = (x: Sentiment) => x === 'Positive' || x === 'Negative';
+  if (s !== r.sentiment && polar(s) && polar(r.sentiment)) {
+    return {
+      ...r, uncertain: true, conf: Math.min(r.conf, 55),
+      reason: r.reason + ' · แต่คะแนนในแบบประเมิน (' + pct + '%) ชี้ไปทาง' +
+        (s === 'Positive' ? 'เชิงบวก' : 'เชิงลบ') + ' — ควรให้เจ้าหน้าที่ยืนยัน',
+    };
+  }
+  return r;
+}
+
 // ---------- วิเคราะห์ครบชุด (rule-based) ----------
 export interface AiResult extends AiSent { journey: string; catProduct: string; catSales: string; owner: string; priority: Priority }
 export function analyzeText(text: string, channel?: string): AiResult {
