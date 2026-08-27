@@ -3,7 +3,7 @@
 // หลักการ: แยก "วันที่เกิดเรื่อง (ต้นทาง)" ที่มากับไฟล์ ออกจาก "วันที่นำเข้าระบบ" (บันทึกอัตโนมัติ = วันนี้)
 // รองรับ .csv และ .xlsx โดยตรง — หาแถวหัวตารางเองใน 10 แถวแรก + รับชื่อคอลัมน์หลายแบบ + แปลงวันที่ พ.ศ./d-m-Y ให้อัตโนมัติ
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { analyzeText, analyzeSmartBatch, applyScoreHint, SmartResult } from '../../lib/ai';
 
@@ -21,6 +21,8 @@ const CH = [
 const PRODUCTS = ['อาคารเพื่อขาย/เช่าซื้อ', 'อาคารเช่า', 'เช่าจัดประโยชน์'];
 const JOURNEYS = ['Awareness', 'Consideration', 'Purchase', 'Service', 'Loyalty', 'Win Back'];
 const HEADERS = ['วันที่เกิดเรื่อง', 'หัวข้อ', 'ข้อความเสียงลูกค้า', 'แหล่งที่มา', 'กลุ่มผลิตภัณฑ์', 'Journey'];
+// ขั้นตอนใน wizard อัปโหลดไฟล์
+const STEPS: [number, string][] = [[1, 'ช่องทาง'], [2, 'อัปโหลด'], [3, 'ตรวจจับคอลัมน์'], [4, 'ตรวจ & บันทึก']];
 
 // ---------- CSV parser เล็ก ๆ (รองรับ "..." และ , ในข้อความ) ----------
 function parseCSV(text: string): string[][] {
@@ -270,6 +272,8 @@ export default function ImportPage() {
   const [dTo, setDTo] = useState('');
   const [fyLabel, setFyLabel] = useState('');
   const [method, setMethod] = useState<'file' | 'api' | 'forms' | 'db'>('file');
+  const [step, setStep] = useState(1);        // ขั้นตอนใน wizard: 1 ช่องทาง · 2 อัปโหลด · 3 ตรวจจับ · 4 บันทึก
+  const [dragOver, setDragOver] = useState(false);
   const [history, setHistory] = useState<UploadLog[]>([]);
   const fnBase = (process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://<โปรเจกต์>.supabase.co') + '/functions/v1/ingest-voc';
 
@@ -313,8 +317,16 @@ export default function ImportPage() {
   }
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; if (f) readFile(f);
+  }
+  // ลากไฟล์มาวางในกล่องอัปโหลด
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault(); setDragOver(false);
+    const f = e.dataTransfer.files?.[0]; if (f) readFile(f);
+  }
+
+  function readFile(f: File) {
     setMsg(''); setErr(''); setRows([]); setGrid([]);
-    const f = e.target.files?.[0]; if (!f) return;
     setFileName(f.name);
     const isXlsx = /\.(xlsx|xls)$/i.test(f.name);
     if (!isXlsx && !/\.(csv|txt)$/i.test(f.name)) { setErr('รองรับไฟล์ .csv และ .xlsx เท่านั้น'); return; }
@@ -400,6 +412,7 @@ export default function ImportPage() {
     }
 
     setErr('');
+    setStep(3);      // อ่านไฟล์ได้แล้ว → ไปขั้นตรวจจับคอลัมน์
     setMsg(restored
       ? 'ใช้การจับคู่คอลัมน์ที่เคยบันทึกไว้ของช่องทาง "' + ch.name + '" — แก้ได้ด้านล่าง'
       : picked.length
@@ -575,7 +588,7 @@ export default function ImportPage() {
           : ' · วิเคราะห์แบบ rule-based') +
         (scored ? ' · ใช้คะแนนแบบประเมินช่วยตัดสิน ' + scored + ' รายการ' : '') +
         ' — ดูได้ในเมนูรายการ VOC');
-      setRows([]); setFileName(''); setGrid([]); setCols([]); setTextCols([]); setScoreCols([]);
+      setRows([]); setFileName(''); setGrid([]); setCols([]); setTextCols([]); setScoreCols([]); setStep(1);
     } catch (e: any) {
       setErr('นำเข้าไม่สำเร็จ: ' + (e.message || String(e)));
     }
@@ -584,111 +597,161 @@ export default function ImportPage() {
 
   // นำเข้าข้อมูลเป็นสิทธิ์ของแอดมินเท่านั้น (operator/executive เข้าไม่ได้)
   const blocked = role !== 'admin' && role !== 'mock' && role !== 'none';
+  // ขั้นสูงสุดที่กดข้ามไปได้ (ยังไม่มีไฟล์ = ไปได้แค่ขั้น 2)
+  const maxStep = !grid.length ? 2 : !rows.length ? 3 : 4;
 
   return (
     <>
       <header className="top"><h1>นำเข้า & เชื่อมต่อข้อมูลเสียงลูกค้า</h1><div className="sub">รับข้อมูลได้หลายรูปแบบ — อัปโหลดไฟล์ · Google Forms/ฟอร์มออนไลน์ · ฐานข้อมูล/ระบบภายใน · API เรียลไทม์</div></header>
-      <div className="content">
+      <div className="content imp">
         {blocked ? (
-          <div className="card">🔒 เมนูนำเข้าข้อมูลสำหรับบทบาทแอดมินเท่านั้น</div>
+          <div className="imp-panel">🔒 เมนูนำเข้าข้อมูลสำหรับบทบาทแอดมินเท่านั้น</div>
         ) : (
         <>
         {/* เลือกรูปแบบการนำเข้า */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12, marginBottom: 16 }}>
+        <div className="imp-ways">
           {([
             ['file', '📤', 'อัปโหลดไฟล์', 'CSV / Excel'],
-            ['forms', '📝', 'Google Forms / ฟอร์มออนไลน์', 'Forms · Microsoft Forms ฯลฯ'],
-            ['db', '🗄️', 'ฐานข้อมูล / ระบบภายใน', 'เชื่อมระบบองค์กร'],
-            ['api', '🔌', 'API / Webhook (เรียลไทม์)', 'LINE OA · Facebook · อื่น ๆ'],
+            ['forms', '📝', 'Google Forms', 'ฟอร์มออนไลน์'],
+            ['db', '🗄️', 'ฐานข้อมูล', 'เชื่อมระบบองค์กร'],
+            ['api', '🔌', 'API / Webhook', 'LINE OA · Facebook'],
           ] as const).map(([k, ic, name, desc]) => (
-            <div key={k} className="card chan-card" style={{ marginBottom: 0, borderColor: method === k ? 'var(--blue)' : 'var(--line)', outline: method === k ? '2px solid var(--blue)' : 'none' }} onClick={() => setMethod(k)}>
-              <div style={{ fontSize: 22 }}>{ic}</div>
-              <div style={{ fontWeight: 700, fontSize: 14, marginTop: 4 }}>{name}</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{desc}</div>
-            </div>
+            <button key={k} type="button" className={'imp-way' + (method === k ? ' on' : '')} onClick={() => setMethod(k)}>
+              <div className="ic">{ic}</div>
+              <div className="nm">{name}</div>
+              <div className="ds">{desc}</div>
+            </button>
           ))}
         </div>
 
         {method === 'file' && <>
-        {/* ขั้น 1: เลือกช่องทาง */}
-        <div className="card">
-          <h3>1️⃣ เลือกช่องทางที่มาของข้อมูล</h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
-            <select style={inp} value={chId} onChange={e => { setChId(e.target.value); const c = CH.find(x => x.id === e.target.value)!; setSource(c.src[0] || c.name); }}>
-              {CH.map(c => <option key={c.id} value={c.id}>{c.name}{c.realtime ? ' (ปกติเรียลไทม์ — นำเข้าย้อนหลังได้)' : ''}</option>)}
-            </select>
-            <select style={inp} value={source} onChange={e => setSource(e.target.value)}>
-              {ch.src.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <button className="btn" type="button" onClick={downloadTemplate}>⬇️ ดาวน์โหลดเทมเพลต CSV</button>
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
-            คอลัมน์: {HEADERS.join(' · ')} — "วันที่เกิดเรื่อง" ใช้รูปแบบ YYYY-MM-DD ส่วน "วันที่นำเข้าระบบ" ระบบบันทึกให้อัตโนมัติ (วันนี้)
-          </div>
+        {/* ---------- แถบขั้นตอน ---------- */}
+        <div className="imp-steps">
+          {STEPS.map(([n, label], idx) => (
+            <Fragment key={n}>
+              {idx > 0 && <div className={'imp-line' + (step > n - 1 ? ' done' : '')} />}
+              <button type="button" disabled={n > maxStep}
+                className={'imp-step' + (step === n ? ' on' : '') + (step > n ? ' done' : '')}
+                onClick={() => n <= maxStep && setStep(n)}>
+                <span className="imp-dot">{step > n ? '✓' : n}</span>
+                <span className="lb">{label}</span>
+              </button>
+            </Fragment>
+          ))}
         </div>
 
-        {/* ขั้น 2: อัปโหลด */}
-        <div className="card">
-          <h3>2️⃣ อัปโหลดไฟล์ CSV หรือ Excel</h3>
-          <input type="file" accept=".csv,.txt,.xlsx,.xls" onChange={onFile} style={{ marginTop: 8, fontSize: 13.5, fontFamily: 'inherit' }} />
-          {fileName && <span style={{ fontSize: 12.5, color: 'var(--muted)', marginLeft: 10 }}>{fileName}</span>}
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
-            * รองรับ .csv และ .xlsx (อ่านแผ่นแรก) · ไม่ต้องตรงเทมเพลตก็ได้ — ขั้นถัดไปจะให้เลือกเองว่าคอลัมน์ไหนคืออะไร
+        {/* ---------- ขั้น 1: ช่องทาง ---------- */}
+        {step === 1 && (
+          <div className="imp-panel">
+            <div className="imp-h">ข้อมูลชุดนี้มาจากช่องทางไหน</div>
+            <div className="imp-sub">ใช้จัดกลุ่มเสียงลูกค้าในรายงานและแดชบอร์ด · เลือกให้ตรงกับต้นทางจริง</div>
+            <div className="imp-grid">
+              <label className="imp-field">
+                <span>ช่องทาง</span>
+                <select value={chId} onChange={e => { setChId(e.target.value); const c = CH.find(x => x.id === e.target.value)!; setSource(c.src[0] || c.name); }}>
+                  {CH.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </label>
+              <label className="imp-field">
+                <span>แหล่งที่มาในช่องทาง</span>
+                <select value={source} onChange={e => setSource(e.target.value)}>
+                  {ch.src.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="imp-alert info">
+              ไฟล์ของคุณไม่ต้องตรงเทมเพลต — ขั้นถัดไประบบจะอ่านเนื้อหาทุกคอลัมน์แล้วเดาให้เองว่าอันไหนคือข้อความ คะแนน หรือวันที่
+              {ch.realtime && <><br />ช่องทางนี้ปกติรับแบบเรียลไทม์ผ่าน API — อัปโหลดไฟล์ย้อนหลังได้เช่นกัน</>}
+            </div>
+            <div className="imp-foot">
+              <button type="button" className="imp-btn" onClick={downloadTemplate}>⬇ ดาวน์โหลดเทมเพลต</button>
+              <button type="button" className="imp-btn pri" onClick={() => setStep(2)}>ถัดไป →</button>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* ขั้น 3: จับคู่คอลัมน์ */}
-        {grid.length > 0 && (
-          <div className="card">
-            <h3>3️⃣ ตรวจจับคอลัมน์อัตโนมัติ — ตรวจความถูกต้องก่อนบันทึก</h3>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
-              ระบบอ่าน<b>เนื้อหาจริง</b>ในทุกคอลัมน์แล้วเดาให้ว่าอันไหนเป็นข้อความบรรยาย / คะแนน / วันที่ — ไม่ต้องพึ่งชื่อหัวคอลัมน์
-              จึงรองรับฟอร์มที่ต่างกันของทั้ง 8 ช่องทางได้ · ติ๊กเพิ่ม/เอาออกได้เอง
+        {/* ---------- ขั้น 2: อัปโหลด ---------- */}
+        {step === 2 && (
+          <div className="imp-panel">
+            <div className="imp-h">อัปโหลดไฟล์</div>
+            <div className="imp-sub">รองรับ .csv · .xlsx · .xls (อ่านแผ่นแรก) — ไฟล์อยู่ในเครื่องคุณ ระบบอ่านในเบราว์เซอร์ก่อนบันทึก</div>
+
+            <label className={'imp-drop' + (dragOver ? ' over' : '')}
+              onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={onDrop}>
+              <input type="file" accept=".csv,.txt,.xlsx,.xls" onChange={onFile} style={{ display: 'none' }} />
+              <div className="ic">{dragOver ? '📥' : '📄'}</div>
+              <div className="t1">{dragOver ? 'วางไฟล์ได้เลย' : 'ลากไฟล์มาวางที่นี่'}</div>
+              <div className="t2">หรือคลิกเพื่อเลือกไฟล์จากเครื่อง</div>
+            </label>
+
+            {fileName && (
+              <div className="imp-file">
+                <span style={{ fontSize: 18 }}>📗</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fileName}</div>
+                  {grid.length > 0 && <div className="imp-note">อ่านได้ {grid.length.toLocaleString()} แถว · {cols.length} คอลัมน์</div>}
+                </div>
+                {grid.length > 0 && <span style={{ color: 'var(--iok)', fontWeight: 700 }}>✓</span>}
+              </div>
+            )}
+
+            {err && <div className="imp-alert bad">{err}</div>}
+
+            <div className="imp-foot">
+              <button type="button" className="imp-btn" onClick={() => setStep(1)}>← ย้อนกลับ</button>
+              <button type="button" className="imp-btn pri" disabled={!grid.length} onClick={() => setStep(3)}>ถัดไป →</button>
+            </div>
+          </div>
+        )}
+
+        {/* ---------- ขั้น 3: ตรวจจับคอลัมน์ ---------- */}
+        {step === 3 && grid.length > 0 && (
+          <div className="imp-panel">
+            <div className="imp-h">ตรวจจับคอลัมน์อัตโนมัติ</div>
+            <div className="imp-sub">
+              ระบบอ่าน<b>เนื้อหาจริง</b>ในทุกคอลัมน์แล้วเดาว่าอันไหนเป็นข้อความบรรยาย คะแนน หรือวันที่ — ไม่พึ่งชื่อหัวคอลัมน์
+              จึงรองรับฟอร์มที่ต่างกันของทั้ง 8 ช่องทาง · ติ๊กเพิ่มหรือเอาออกได้เอง
             </div>
 
-            {/* ตารางผลตรวจจับ + เลือกคอลัมน์ข้อความ (หลายช่องได้ → แยกเป็นหลายเสียง) */}
-            <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>
-              🗣️ คอลัมน์ที่จะนำไปวิเคราะห์ ({textCols.length} ช่อง → {rows.length.toLocaleString()} รายการ)
+            <div className="imp-stats">
+              <div className="imp-chip"><div className="n" style={{ color: 'var(--ia)' }}>{textCols.length}</div><div className="l">คอลัมน์ข้อความ</div></div>
+              <div className="imp-chip"><div className="n">{scoreCols.length}</div><div className="l">คอลัมน์คะแนน</div></div>
+              <div className="imp-chip"><div className="n">{rows.length.toLocaleString()}</div><div className="l">รายการที่จะได้</div></div>
             </div>
-            <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid var(--line)', borderRadius: 10, marginBottom: 12 }}>
+
+            <div className="imp-box" style={{ maxHeight: 280, marginBottom: 16 }}>
               <table style={{ fontSize: 12 }}>
                 <thead><tr>
-                  <th style={{ width: 40 }}>ใช้</th><th>คอลัมน์</th><th style={{ width: 92 }}>ระบบมองเป็น</th>
-                  <th style={{ width: 62 }}>กรอก</th><th style={{ width: 66 }}>ยาวเฉลี่ย</th><th>ตัวอย่าง</th>
+                  <th style={{ width: 40 }}>ใช้</th><th>คอลัมน์</th><th style={{ width: 96 }}>ระบบมองเป็น</th>
+                  <th style={{ width: 58 }}>กรอก</th><th>ตัวอย่าง</th>
                 </tr></thead>
                 <tbody>{cols.filter(c => c.kind !== 'empty').map(c => {
                   const on = textCols.includes(c.i);
                   return (
-                    <tr key={c.i} style={on ? { background: 'rgba(46,108,240,.07)' } : undefined}>
-                      <td>
-                        <input type="checkbox" checked={on} onChange={() =>
-                          setTextCols(v => (on ? v.filter(x => x !== c.i) : [...v, c.i].sort((a, b) => a - b)))} />
-                      </td>
-                      <td>{(c.i + 1)}. {c.name || <i style={{ color: 'var(--muted)' }}>(ไม่มีชื่อ)</i>}</td>
-                      <td><span style={{
-                        fontSize: 11, padding: '1px 7px', borderRadius: 20,
-                        background: c.kind === 'text' ? '#dbeafe' : c.kind === 'score' ? '#fef3c7' : c.kind === 'date' ? '#dcfce7' : '#f1f5f9',
-                        color: '#334155',
-                      }}>{KIND_TH[c.kind]}</span></td>
+                    <tr key={c.i} style={on ? { background: 'rgba(46,108,240,.08)' } : undefined}>
+                      <td><input type="checkbox" checked={on} style={{ width: 'auto' }} onChange={() =>
+                        setTextCols(v => (on ? v.filter(x => x !== c.i) : [...v, c.i].sort((a, b) => a - b)))} /></td>
+                      <td>{c.i + 1}. {c.name || <i style={{ opacity: .6 }}>(ไม่มีชื่อ)</i>}</td>
+                      <td><span className={'kind k-' + c.kind}>{KIND_TH[c.kind]}</span></td>
                       <td>{Math.round(c.fill * 100)}%</td>
-                      <td>{Math.round(c.avgLen)}</td>
-                      <td style={{ color: 'var(--muted)' }}>{c.sample.slice(0, 60)}</td>
+                      <td style={{ opacity: .7 }}>{c.sample.slice(0, 55)}</td>
                     </tr>
                   );
                 })}</tbody>
               </table>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 12 }}>
-              <label style={{ fontSize: 12.5 }}>
-                <div style={{ marginBottom: 4, color: 'var(--muted)' }}>แถวหัวตาราง</div>
-                <select style={{ ...inp, width: '100%' }} value={headRow} onChange={e => setHeadRow(+e.target.value)}>
+            <div className="imp-grid">
+              <label className="imp-field">
+                <span>แถวหัวตาราง</span>
+                <select value={headRow} onChange={e => setHeadRow(+e.target.value)}>
                   {grid.slice(0, 10).map((r, i) => (
-                    <option key={i} value={i}>แถวที่ {i + 1} — {r.filter(Boolean).slice(0, 3).join(' / ').slice(0, 45) || '(ว่าง)'}</option>
+                    <option key={i} value={i}>แถวที่ {i + 1} — {r.filter(Boolean).slice(0, 3).join(' / ').slice(0, 40) || '(ว่าง)'}</option>
                   ))}
                 </select>
               </label>
-
               {([
                 ['date', 'วันที่เกิดเรื่อง'],
                 ['topic', 'หัวข้อ/ประเด็น'],
@@ -696,11 +759,10 @@ export default function ImportPage() {
                 ['prod', 'กลุ่มผลิตภัณฑ์'],
                 ['jr', 'Journey'],
               ] as const).map(([k, label]) => (
-                <label key={k} style={{ fontSize: 12.5 }}>
-                  <div style={{ marginBottom: 4, color: 'var(--muted)' }}>{label}</div>
-                  <select style={{ ...inp, width: '100%' }} value={cmap[k]}
-                    onChange={e => setCmap(m => ({ ...m, [k]: +e.target.value }))}>
-                    <option value={-1}>{k === 'date' ? '— ไม่มีในไฟล์ (ให้ระบบเติมให้) —' : '— ไม่ใช้ —'}</option>
+                <label key={k} className="imp-field">
+                  <span>{label}</span>
+                  <select value={cmap[k]} onChange={e => setCmap(m => ({ ...m, [k]: +e.target.value }))}>
+                    <option value={-1}>{k === 'date' ? '— ไม่มีในไฟล์ (ระบบเติมให้) —' : '— ไม่ใช้ —'}</option>
                     {colOptions.map(o => <option key={o.i} value={o.i}>{o.label}</option>)}
                   </select>
                 </label>
@@ -709,129 +771,140 @@ export default function ImportPage() {
 
             {/* คะแนนความพึงพอใจ → ช่วยตัดสิน sentiment */}
             {scoreCols.length > 0 && (
-              <div style={{ marginTop: 14, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '11px 13px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={useScore} onChange={e => setUseScore(e.target.checked)} />
-                  ⭐ ใช้คะแนนความพึงพอใจ {scoreCols.length} คอลัมน์ ช่วยตัดสิน Sentiment
+              <div className="imp-alert warn">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={useScore} style={{ width: 'auto' }} onChange={e => setUseScore(e.target.checked)} />
+                  ใช้คะแนนความพึงพอใจ {scoreCols.length} คอลัมน์ ช่วยตัดสิน Sentiment
                 </label>
-                <div style={{ fontSize: 11.5, color: '#92400e', marginTop: 7, lineHeight: 1.75 }}>
-                  คอลัมน์: {scoreCols.map(i => (cols[i]?.name || 'คอลัมน์ ' + (i + 1)).slice(0, 28)).join(' · ')}<br />
-                  คะแนนสูง → เชิงบวก · คะแนนต่ำ → เชิงลบ · ใช้เมื่อข้อความสั้นหรือกำกวม ถ้าข้อความชัดเจนแต่ขัดกับคะแนน
-                  ระบบจะส่งเข้าคิวให้เจ้าหน้าที่ยืนยันแทน
+                <div style={{ marginTop: 6, opacity: .9 }}>
+                  {scoreCols.map(i => (cols[i]?.name || 'คอลัมน์ ' + (i + 1)).slice(0, 26)).join(' · ')}<br />
+                  คะแนนสูง → เชิงบวก · ต่ำ → เชิงลบ · ถ้าข้อความชัดเจนแต่ขัดกับคะแนน ระบบจะส่งเข้าคิวให้เจ้าหน้าที่ยืนยันแทน
                 </div>
               </div>
             )}
 
-            {/* ไม่มีคอลัมน์วันที่ → ให้ระบุช่วงแล้วกระจายเท่า ๆ กัน */}
+            {/* ไม่มีคอลัมน์วันที่ → กระจายวันเท่า ๆ กัน */}
             {cmap.date < 0 && (
-              <div style={{ marginTop: 14, background: '#f1f5f9', borderRadius: 10, padding: '11px 13px' }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>
-                  📅 ไฟล์ไม่มีวันที่ — ระบบจะกระจายวันที่เท่า ๆ กันในช่วงที่กำหนด
+              <div className="imp-alert info">
+                <div style={{ fontWeight: 700, marginBottom: 9 }}>📅 ไฟล์ไม่มีวันที่ — ระบบจะกระจายวันเท่า ๆ กันในช่วงนี้</div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                  <label className="imp-field" style={{ width: 158 }}><span>ตั้งแต่</span>
+                    <input type="date" value={dFrom} onChange={e => setDFrom(e.target.value)} /></label>
+                  <label className="imp-field" style={{ width: 158 }}><span>ถึง</span>
+                    <input type="date" value={dTo} onChange={e => setDTo(e.target.value)} /></label>
+                  <button type="button" className="imp-btn" style={{ padding: '8px 13px' }}
+                    onClick={() => { const r = currentFYRange(); setDFrom(r.from); setDTo(r.to); }}>↺ ไตรมาสปัจจุบัน</button>
                 </div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5 }}>
-                  <label>ตั้งแต่ <input type="date" style={{ ...inp, padding: '6px 9px' }} value={dFrom} onChange={e => setDFrom(e.target.value)} /></label>
-                  <label>ถึง <input type="date" style={{ ...inp, padding: '6px 9px' }} value={dTo} onChange={e => setDTo(e.target.value)} /></label>
-                  <button className="btn" type="button" style={{ padding: '6px 12px', fontSize: 12 }}
-                    onClick={() => { const r = currentFYRange(); setDFrom(r.from); setDTo(r.to); }}>
-                    ↺ ใช้ไตรมาสปัจจุบัน
-                  </button>
-                </div>
-                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8 }}>
-                  ค่าเริ่มต้น = {fyLabel || 'ไตรมาสปัจจุบันของปีงบประมาณ'} (ไม่เกินวันนี้) · แก้วันรายแถวได้อีกในตารางด้านล่าง
+                <div className="imp-note" style={{ marginTop: 8 }}>
+                  ค่าเริ่มต้น = {fyLabel || 'ไตรมาสปัจจุบันของปีงบประมาณ'} (ไม่เกินวันนี้)
                 </div>
               </div>
             )}
 
-            {!textCols.length && (
-              <div style={{ fontSize: 12.5, color: '#b91c1c', marginTop: 12 }}>
-                ⚠ ติ๊กเลือกอย่างน้อย 1 คอลัมน์ในตารางด้านบน จึงจะแสดงตารางตรวจสอบและบันทึกได้
-              </div>
-            )}
+            {!textCols.length
+              ? <div className="imp-alert bad">ติ๊กเลือกอย่างน้อย 1 คอลัมน์ในตารางด้านบน จึงจะไปขั้นถัดไปได้</div>
+              : (
+                <div className="imp-alert info">
+                  <div style={{ fontWeight: 700, marginBottom: 5 }}>ตัวอย่างที่จะบันทึก</div>
+                  {rows.slice(0, 3).map((r, i) => (
+                    <div key={i} style={{ opacity: .85 }}>• <b>{r.topic.slice(0, 34) || '(ไม่มีหัวข้อ)'}</b> — {r.text.slice(0, 76)}
+                      {r.score !== null && <> · คะแนน {Math.round(r.score * 100)}%</>}</div>
+                  ))}
+                </div>
+              )}
 
-            {textCols.length > 0 && (
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12, lineHeight: 1.8 }}>
-                ตัวอย่างที่จะบันทึก (3 รายการแรก):
-                {rows.slice(0, 3).map((r, i) => (
-                  <div key={i}>• <b>{r.topic.slice(0, 40) || '(ไม่มีหัวข้อ)'}</b> — {r.text.slice(0, 90)}
-                    {r.score !== null && <span style={{ color: '#92400e' }}> · คะแนน {Math.round(r.score * 100)}%</span>}
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="imp-foot">
+              <button type="button" className="imp-btn" onClick={() => setStep(2)}>← ย้อนกลับ</button>
+              <button type="button" className="imp-btn pri" disabled={!rows.length} onClick={() => setStep(4)}>
+                ถัดไป → ตรวจ {rows.length.toLocaleString()} รายการ
+              </button>
+            </div>
           </div>
         )}
 
-        {/* ขั้น 4: พรีวิว + บันทึก */}
-        {rows.length > 0 && (
-          <div className="card">
-            <h3>4️⃣ ตรวจสอบ/แก้ไขก่อนบันทึก — ผ่าน <b style={{ color: 'var(--green)' }}>{ok.length}</b> / มีปัญหา <b style={{ color: 'var(--red)' }}>{bad.length}</b></h3>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>แก้ไขในช่องได้เลย (ตรวจสอบใหม่ทันที) · แถวที่มีปัญหาเป็นพื้นแดง · กด 🗑️ เพื่อลบแถว</div>
-            <div style={{ maxHeight: 440, overflow: 'auto', border: '1px solid var(--line)', borderRadius: 10 }}>
+        {/* ---------- ขั้น 4: ตรวจสอบ + บันทึก ---------- */}
+        {step === 4 && rows.length > 0 && (
+          <div className="imp-panel">
+            <div className="imp-h">ตรวจสอบก่อนบันทึก</div>
+            <div className="imp-sub">แก้ไขในช่องได้เลย ระบบตรวจใหม่ทันที · แถวที่มีปัญหาจะไม่ถูกบันทึก</div>
+
+            <div className="imp-stats">
+              <div className="imp-chip"><div className="n" style={{ color: 'var(--iok)' }}>{ok.length.toLocaleString()}</div><div className="l">พร้อมบันทึก</div></div>
+              <div className="imp-chip"><div className="n" style={{ color: bad.length ? 'var(--ibad)' : undefined }}>{bad.length.toLocaleString()}</div><div className="l">ต้องแก้ไข</div></div>
+              <div className="imp-chip"><div className="n">{ch.name.slice(0, 14)}</div><div className="l">ช่องทางปลายทาง</div></div>
+            </div>
+
+            <div className="imp-box" style={{ maxHeight: 430 }}>
               <table style={{ fontSize: 12.5 }}>
-                <thead><tr><th style={{ width: 34 }}>#</th><th>วันที่เกิดเรื่อง</th><th>หัวข้อ</th><th>ข้อความเสียงลูกค้า</th><th>แหล่ง</th><th>ผลตรวจ</th><th></th></tr></thead>
+                <thead><tr><th style={{ width: 34 }}>#</th><th>วันที่</th><th>หัวข้อ</th><th>ข้อความเสียงลูกค้า</th><th>แหล่ง</th><th>ผลตรวจ</th><th /></tr></thead>
                 <tbody>{rows.map((r, i) => (
-                  <tr key={i} style={r.err ? { background: '#fef2f2' } : undefined}>
+                  <tr key={i} style={r.err ? { background: 'rgba(220,38,38,.07)' } : undefined}>
                     <td>{i + 1}</td>
-                    <td><input value={r.occurred} onChange={e => editRow(i, 'occurred', e.target.value)} style={{ ...cellInp, width: 108 }} placeholder="YYYY-MM-DD" /></td>
-                    <td><input value={r.topic} onChange={e => editRow(i, 'topic', e.target.value)} style={{ ...cellInp, width: 130 }} /></td>
+                    <td><input value={r.occurred} onChange={e => editRow(i, 'occurred', e.target.value)} style={{ ...cellInp, width: 104 }} placeholder="YYYY-MM-DD" /></td>
+                    <td><input value={r.topic} onChange={e => editRow(i, 'topic', e.target.value)} style={{ ...cellInp, width: 128 }} /></td>
                     <td><input value={r.text} onChange={e => editRow(i, 'text', e.target.value)} style={{ ...cellInp, width: 280 }} /></td>
-                    <td><input value={r.source} onChange={e => editRow(i, 'source', e.target.value)} style={{ ...cellInp, width: 100 }} placeholder={source} /></td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{r.err ? <span style={{ color: 'var(--red)', fontSize: 11.5 }}>✗ {r.err}</span> : <span style={{ color: 'var(--green)', fontSize: 11.5 }}>✓ พร้อม</span>}</td>
-                    <td><button type="button" onClick={() => delRow(i)} title="ลบแถวนี้" style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 15 }}>🗑️</button></td>
+                    <td><input value={r.source} onChange={e => editRow(i, 'source', e.target.value)} style={{ ...cellInp, width: 96 }} placeholder={source} /></td>
+                    <td style={{ whiteSpace: 'nowrap', fontSize: 11.5 }}>{r.err
+                      ? <span style={{ color: 'var(--ibad)' }}>✗ {r.err}</span>
+                      : <span style={{ color: 'var(--iok)' }}>✓ พร้อม</span>}</td>
+                    <td><button type="button" onClick={() => delRow(i)} title="ลบแถวนี้"
+                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14 }}>🗑️</button></td>
                   </tr>
                 ))}</tbody>
               </table>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>ทั้งหมด {rows.length} แถว · จะบันทึกเฉพาะแถวที่ผ่าน ({ok.length})</div>
-            <div style={{ marginTop: 12 }}>
-              {role === 'mock'
-                ? <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>* โหมดข้อมูลจำลอง — ปุ่มบันทึกจะใช้ได้เมื่อเชื่อม Supabase</div>
-                : role === 'none'
-                ? <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>* กรุณาเข้าสู่ระบบก่อนนำเข้าข้อมูล</div>
-                : (
-                <>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 10, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={useLLM} onChange={e => setUseLLM(e.target.checked)} />
-                    🧠 วิเคราะห์ด้วย LLM จริง (แม่นกว่า — ส่งครั้งละ 10 แถว, ถ้า LLM ใช้ไม่ได้จะสลับเป็น rule-based ให้อัตโนมัติ)
-                  </label>
-                  {useLLM && (
-                    <div style={{ fontSize: 12, color: 'var(--muted)', margin: '-4px 0 10px 26px' }}>
-                      ประมาณ {Math.ceil(ok.length / 10)} คำขอ · ตรวจการเชื่อมต่อ LLM ได้ที่เมนู &ldquo;จัดการระบบ&rdquo;
-                    </div>
-                  )}
-                  <button className="btn" onClick={save} disabled={busy || !ok.length}>{busy ? (prog || 'กำลังนำเข้า…') : '💾 บันทึก ' + ok.length + ' รายการเข้าระบบ'}</button>
-                </>
-                )}
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13, marginTop: 16, cursor: 'pointer' }}>
+              <input type="checkbox" checked={useLLM} style={{ width: 'auto' }} onChange={e => setUseLLM(e.target.checked)} />
+              <span><b>🧠 วิเคราะห์ด้วย LLM จริง</b> <span className="imp-note">— แม่นกว่า ส่งครั้งละ 10 แถว
+                {useLLM && ok.length ? ' (~' + Math.ceil(ok.length / 10) + ' คำขอ)' : ''} · ถ้าใช้ไม่ได้จะสลับเป็น rule-based อัตโนมัติ</span></span>
+            </label>
+
+            {role === 'mock' && <div className="imp-alert info">โหมดข้อมูลจำลอง — ปุ่มบันทึกใช้ได้เมื่อเชื่อม Supabase แล้ว</div>}
+            {role === 'none' && <div className="imp-alert info">กรุณาเข้าสู่ระบบก่อนนำเข้าข้อมูล</div>}
+            {err && <div className="imp-alert bad">{err}</div>}
+
+            <div className="imp-foot">
+              <button type="button" className="imp-btn" onClick={() => setStep(3)}>← ย้อนกลับ</button>
+              <button type="button" className="imp-btn pri" onClick={save} disabled={busy || !ok.length || role === 'mock' || role === 'none'}>
+                {busy ? (prog || 'กำลังนำเข้า…') : '💾 บันทึก ' + ok.length.toLocaleString() + ' รายการ'}
+              </button>
             </div>
           </div>
         )}
-        {msg && <div className="card" style={{ color: '#15803d' }}>✓ {msg}</div>}
-        {err && <div className="card" style={{ color: '#b91c1c' }}>{err}</div>}
 
-        {/* ประวัติการอัปโหลด */}
-        <div className="card">
-          <h3>🕒 ประวัติการอัปโหลด (ล่าสุด 20 ครั้ง)</h3>
-          {history.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--muted)' }}>ยังไม่มีประวัติ — เมื่อบันทึกการนำเข้าสำเร็จจะแสดงที่นี่ (ต้องรัน supabase_upload_log.sql ก่อน)</div>
-          ) : (
-            <table>
-              <thead><tr><th>วันเวลา</th><th>ช่องทาง</th><th>ไฟล์</th><th>ทั้งหมด</th><th>นำเข้าสำเร็จ</th><th>โดย</th></tr></thead>
-              <tbody>{history.map(h => {
-                const prof = Array.isArray(h.profiles) ? h.profiles[0] : h.profiles;
-                return (
-                  <tr key={h.id}>
-                    <td style={{ whiteSpace: 'nowrap' }}>{(h.created_at || '').slice(0, 16).replace('T', ' ')}</td>
-                    <td>{CH.find(c => c.id === h.channel_id)?.name || h.channel_id}</td>
-                    <td>{h.file_name || '-'}</td>
-                    <td>{h.total}</td>
-                    <td style={{ color: 'var(--green)', fontWeight: 600 }}>{h.ok_count}</td>
-                    <td>{prof?.full_name || '-'}</td>
-                  </tr>
-                );
-              })}</tbody>
-            </table>
-          )}
-        </div>
+        {msg && <div className="imp-alert ok" style={{ marginTop: 14 }}>✓ {msg}</div>}
+        {err && step !== 2 && step !== 4 && <div className="imp-alert bad" style={{ marginTop: 14 }}>{err}</div>}
+
+        {/* ประวัติการอัปโหลด — แสดงเฉพาะหน้าแรกเพื่อไม่ให้รก */}
+        {step === 1 && (
+          <div className="imp-panel" style={{ marginTop: 16 }}>
+            <div className="imp-h">ประวัติการอัปโหลด</div>
+            <div className="imp-sub" style={{ marginBottom: 12 }}>ล่าสุด 20 ครั้ง</div>
+            {history.length === 0 ? (
+              <div className="imp-note">ยังไม่มีประวัติ — เมื่อบันทึกสำเร็จจะแสดงที่นี่ (ต้องรัน supabase_upload_log.sql ก่อน)</div>
+            ) : (
+              <div className="imp-box">
+                <table>
+                  <thead><tr><th>วันเวลา</th><th>ช่องทาง</th><th>ไฟล์</th><th>ทั้งหมด</th><th>สำเร็จ</th><th>โดย</th></tr></thead>
+                  <tbody>{history.map(h => {
+                    const prof = Array.isArray(h.profiles) ? h.profiles[0] : h.profiles;
+                    return (
+                      <tr key={h.id}>
+                        <td style={{ whiteSpace: 'nowrap' }}>{(h.created_at || '').slice(0, 16).replace('T', ' ')}</td>
+                        <td>{CH.find(c => c.id === h.channel_id)?.name || h.channel_id}</td>
+                        <td>{h.file_name || '-'}</td>
+                        <td>{h.total}</td>
+                        <td style={{ color: 'var(--iok)', fontWeight: 600 }}>{h.ok_count}</td>
+                        <td>{prof?.full_name || '-'}</td>
+                      </tr>
+                    );
+                  })}</tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
         </>}
 
         {/* Google Forms / ฟอร์มออนไลน์ */}
