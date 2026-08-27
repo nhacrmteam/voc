@@ -1,4 +1,4 @@
-import { listVOC, sentimentStats } from '../../lib/data';
+import { listVOC, sentimentStats, JOURNEYS, JOURNEY_TH, JOURNEY_DESC } from '../../lib/data';
 import ReviewQueue from './ReviewQueue';
 import ReanalyzePanel from './ReanalyzePanel';
 
@@ -40,8 +40,11 @@ export default async function Analyze() {
 
   const prod = groupBy(rows, 'catProduct');
   const sales = groupBy(rows, 'catSales');
-  const journey = groupBy(rows, 'journey');
   const owner = groupBy(rows, 'owner');
+  // Journey เรียงตามลำดับขั้น 1→6 เสมอ (ไม่เรียงตามจำนวน) เพราะเป็นเส้นทางที่มีลำดับ
+  const jrCount: Record<string, number> = {};
+  rows.forEach(r => { if (r.journey) jrCount[r.journey] = (jrCount[r.journey] || 0) + 1; });
+  const journeySteps = JOURNEYS.map(k => ({ en: k, th: JOURNEY_TH[k], desc: JOURNEY_DESC[k], n: jrCount[k] || 0 }));
 
   return (
     <>
@@ -89,7 +92,31 @@ export default async function Analyze() {
 
           <BarList title="มิติผลิตภัณฑ์และบริการ" note="AI จำแนกหมวดผลิตภัณฑ์/บริการ" data={prod} total={total} color="#2e6cf0" />
           <BarList title="มิติการสนับสนุนการขาย" note="AI จำแนกหมวดสนับสนุนการขาย" data={sales} total={total} color="#8b5cf6" />
-          <BarList title="Customer Journey (6 ขั้น)" data={journey} total={total} color="#0ea5e9" />
+          {/* Customer Journey — เรียงตามลำดับขั้น พร้อมคำอธิบายว่าเสียงแบบไหนอยู่ขั้นนั้น */}
+          <div className="card">
+            <h3>เส้นทางลูกค้า Customer Journey (6 ขั้น)</h3>
+            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: -6, marginBottom: 10 }}>
+              AI จำแนกจากประเด็นในข้อความเป็นหลัก · ใช้ช่องทางต้นทางช่วยเมื่อข้อความกำกวม
+            </div>
+            {journeySteps.map((j, i) => (
+              <div key={j.en} style={{ margin: '11px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13, marginBottom: 3 }}>
+                  <span>
+                    <span style={{
+                      display: 'inline-grid', placeItems: 'center', width: 18, height: 18, borderRadius: '50%',
+                      background: '#e0f2fe', color: '#0369a1', fontSize: 10.5, fontWeight: 700, marginRight: 7,
+                    }}>{i + 1}</span>
+                    {j.th} <span style={{ color: '#94a3b8', fontSize: 12 }}>({j.en})</span>
+                  </span>
+                  <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{j.n} ({Math.round(j.n / total * 100)}%)</span>
+                </div>
+                <div style={{ height: 8, background: '#eef2f7', borderRadius: 6 }}>
+                  <div style={{ width: Math.round(j.n / total * 100) + '%', height: '100%', background: '#0ea5e9', borderRadius: 6 }} />
+                </div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3, marginLeft: 25 }}>{j.desc}</div>
+              </div>
+            ))}
+          </div>
           <BarList title="ฝ่ายผู้รับผิดชอบ" note="จับคู่ฝ่ายตามประเภทเสียง" data={owner} total={total} color="#f59e0b" />
         </div>
       </div>
