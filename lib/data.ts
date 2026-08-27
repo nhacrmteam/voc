@@ -25,6 +25,32 @@ export const CHANNELS = [
   'สำนักงานสาขาทั่วประเทศ', 'Call Center', 'ระบบร้องเรียน/ข้อเสนอแนะ', 'แบบประเมินความพึงพอใจ'
 ];
 export const PROJECT_TYPES = ['บ้านเอื้ออาทร', 'เคหะชุมชน', 'เคหะชุมชนและบริการชุมชน'];
+
+// ---------- Customer Journey 6 ขั้น ----------
+// เก็บใน DB เป็นภาษาอังกฤษ (ตาม check constraint) แต่แสดงผลเป็นไทยเสมอ
+export const JOURNEYS = ['Awareness', 'Consideration', 'Purchase', 'Service', 'Loyalty', 'Win Back'] as const;
+export const JOURNEY_TH: Record<string, string> = {
+  Awareness: 'การรับรู้',
+  Consideration: 'การพิจารณา',
+  Purchase: 'การซื้อ/ทำสัญญา',
+  Service: 'การใช้บริการ',
+  Loyalty: 'ความผูกพัน',
+  'Win Back': 'การดึงกลับ',
+};
+// คำอธิบายสั้น ๆ ว่าแต่ละขั้นหมายถึงเสียงลูกค้าแบบไหน (ใช้เป็น tooltip/คำโปรย)
+export const JOURNEY_DESC: Record<string, string> = {
+  Awareness: 'เพิ่งรู้จัก กคช. จากสื่อ/โฆษณา/บอกต่อ — ยังไม่ระบุโครงการ',
+  Consideration: 'กำลังหาข้อมูล เปรียบเทียบ สอบถามเงื่อนไข ราคา ทำเล',
+  Purchase: 'จอง ทำสัญญา ยื่นกู้ วางดาวน์ โอนกรรมสิทธิ์',
+  Service: 'อยู่อาศัยแล้ว — แจ้งซ่อม ชำระค่างวด ใช้บริการส่วนกลาง ร้องเรียน',
+  Loyalty: 'พอใจ ชื่นชม แนะนำต่อ อยากซื้อเพิ่ม',
+  'Win Back': 'จะยกเลิก ย้ายออก คืนเงิน หรือเคยเลิกใช้แล้วติดต่อกลับมา',
+};
+/** แสดงชื่อขั้นเป็น "ไทย (English)" — ใช้ทุกหน้าให้ตรงกัน */
+export function journeyLabel(en: string): string {
+  const th = JOURNEY_TH[en];
+  return th ? th + ' (' + en + ')' : (en || '-');
+}
 // โครงสร้างฝ่ายของการเคหะแห่งชาติ แยกตามสายงาน (มติคณะกรรมการฯ ก.พ. 2565)
 // ใช้กับช่อง "หน่วยงานที่เกี่ยวข้อง"
 export const DEPT_GROUPS: { group: string; depts: string[] }[] = [

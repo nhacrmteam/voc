@@ -63,18 +63,44 @@ export const catProd = (t: string) => classifyBy(PROD_CATS, PROD_KW, t);
 export const catSal = (t: string) => classifyBy(SALES_CATS, SALES_KW, t);
 
 // ---------- Customer Journey (6 ขั้น) ----------
-const JOURNEY_KW: [string, string[]][] = [
-  ['Win Back', ['ยกเลิก', 'ย้ายออก', 'เลิกใช้', 'กลับมา', 'คืนเงิน']],
-  ['Loyalty', ['ชื่นชม', 'ประทับใจ', 'ขอบคุณ', 'แนะนำต่อ', 'บอกต่อ']],
-  ['Purchase', ['ทำสัญญา', 'โอนกรรมสิทธิ์', 'เช่าซื้อ', 'ดาวน์', 'จอง', 'ซื้อ']],
-  ['Service', ['ซ่อม', 'ชำรุด', 'ประปา', 'ไฟ', 'ส่วนกลาง', 'ร้องเรียน', 'ค่าเช่า', 'ผ่อน', 'ชำระ', 'สินเชื่อ', 'บริการ']],
-  ['Consideration', ['สอบถาม', 'เปรียบเทียบ', 'เงื่อนไข', 'รายละเอียด', 'ข้อมูลโครงการ', 'สนใจ']],
-  ['Awareness', ['โฆษณา', 'ประชาสัมพันธ์', 'เพจ', 'โพสต์', 'รู้จัก', 'เห็น']],
+// จำแนกจาก "ประเด็นในข้อความ" เป็นหลัก แล้วใช้ "ช่องทางต้นทาง" ช่วยตัดสินเมื่อกำกวม
+// น้ำหนักคำ: คำที่ชี้ขั้นชัดเจน (เช่น โอนกรรมสิทธิ์) ให้ 3 · คำทั่วไป (เช่น จอง) ให้ 1
+const JOURNEY_KW: [string, [string, number][]][] = [
+  ['Win Back', [['ยกเลิกสัญญา', 3], ['ขอคืนเงิน', 3], ['ย้ายออก', 3], ['เลิกใช้', 3], ['ทิ้งใบจอง', 3], ['ยกเลิก', 2], ['คืนเงิน', 2], ['เปลี่ยนใจ', 2], ['กลับมาใช้', 2]]],
+  ['Loyalty', [['แนะนำต่อ', 3], ['บอกต่อ', 3], ['ซื้อเพิ่ม', 3], ['ประทับใจ', 2], ['ชื่นชม', 2], ['ขอบคุณ', 1], ['พอใจมาก', 2], ['อยู่มานาน', 2]]],
+  // Purchase ต้องเป็น "การกระทำจริง" ไม่ใช่แค่พูดถึง — คำอย่าง เช่าซื้อ/ดาวน์ ใช้ถามได้ทุกขั้น จึงให้น้ำหนักต่ำ
+  ['Purchase', [['โอนกรรมสิทธิ์', 3], ['ทำสัญญา', 3], ['ยื่นกู้', 3], ['อนุมัติสินเชื่อ', 3], ['วางดาวน์', 3], ['นัดโอน', 3], ['ระบบจอง', 3], ['จองสิทธิ์', 3], ['ใบจอง', 3], ['จองคิว', 2], ['เช่าซื้อ', 1], ['ดาวน์', 1], ['จอง', 1], ['ซื้อ', 1]]],
+  ['Service', [['แจ้งซ่อม', 3], ['ร้องเรียน', 3], ['ส่วนกลาง', 2], ['ชำรุด', 2], ['ซ่อม', 2], ['ประปา', 2], ['ค่าส่วนกลาง', 2], ['ค่าเช่า', 2], ['ค่างวด', 2], ['ผ่อนชำระ', 2], ['ค้างชำระ', 2], ['ไฟ', 1], ['ขยะ', 1], ['จอดรถ', 1], ['ลิฟต์', 2], ['บริการ', 1], ['เจ้าหน้าที่', 1]]],
+  // คำที่บ่งชี้ว่า "ยังแค่ถาม" ให้น้ำหนักสูง เพื่อไม่ให้ถูก Purchase แย่งไป
+  ['Consideration', [['เปรียบเทียบ', 3], ['อยากทราบ', 3], ['สอบถาม', 3], ['เงื่อนไข', 3], ['อยากรู้', 3], ['สนใจ', 2], ['ข้อมูลโครงการ', 2], ['คุณสมบัติผู้', 2], ['รายละเอียด', 1], ['ราคา', 1], ['ทำเล', 1]]],
+  ['Awareness', [['เห็นโฆษณา', 3], ['ประชาสัมพันธ์', 2], ['โฆษณา', 2], ['เพิ่งรู้จัก', 3], ['เห็นเพจ', 2], ['โพสต์', 1], ['รู้จัก', 1], ['ป้าย', 1]]],
 ];
-export function aiJourney(text: string): string {
+// ช่องทางไหน "ปกติ" อยู่ขั้นไหน — ใช้เฉพาะตอนข้อความไม่ชี้ชัด
+const CHANNEL_JOURNEY: Record<string, string> = {
+  social: 'Awareness',      // Facebook / Line OA — คนเพิ่งเห็นเพจ
+  web: 'Consideration',     // เว็บ/อีเมล — หาข้อมูลก่อนตัดสินใจ
+  sales: 'Consideration',   // ทีมรณรงค์ขาย
+  hq: 'Service',
+  branch: 'Service',
+  call: 'Service',          // Call Center — ส่วนใหญ่คนที่อยู่อาศัยแล้ว
+  complain: 'Service',      // ระบบร้องเรียน
+  survey: 'Loyalty',        // แบบประเมินความพึงพอใจ — ประเมินหลังใช้บริการ
+};
+/**
+ * จำแนกขั้น Customer Journey
+ * @param text ข้อความเสียงลูกค้า (รวมหัวข้อ)
+ * @param channel รหัสช่องทางต้นทาง — ใช้ช่วยตัดสินเมื่อข้อความกำกวม
+ */
+export function aiJourney(text: string, channel?: string): string {
   const t = (text || '').toLowerCase();
-  for (const [stage, kws] of JOURNEY_KW) if (kws.some(k => t.includes(k))) return stage;
-  return 'Service';
+  let best = '', bs = 0;
+  for (const [stage, kws] of JOURNEY_KW) {
+    const sc = kws.reduce((a, [k, w]) => a + (t.includes(k) ? w : 0), 0);
+    if (sc > bs) { bs = sc; best = stage; }
+  }
+  if (bs >= 2) return best;                                   // ข้อความชี้ชัด → เชื่อข้อความ
+  const byChannel = channel ? CHANNEL_JOURNEY[channel] : '';  // กำกวม → ใช้ช่องทางช่วย
+  return best || byChannel || 'Service';
 }
 
 // ---------- ฝ่ายผู้รับผิดชอบ (ตามผังองค์กร กคช. — จับคู่ตามประเภทเสียง) ----------
@@ -145,7 +171,7 @@ export function applyScoreHint<T extends AiResult>(r: T, score: number | null | 
 export interface AiResult extends AiSent { journey: string; catProduct: string; catSales: string; owner: string; priority: Priority }
 export function analyzeText(text: string, channel?: string): AiResult {
   const s = aiSentiment(text);
-  return { ...s, journey: aiJourney(text), catProduct: catProd(text), catSales: catSal(text), owner: ownerFor(text, channel), priority: aiPriority(s, text) };
+  return { ...s, journey: aiJourney(text, channel), catProduct: catProd(text), catSales: catSal(text), owner: ownerFor(text, channel), priority: aiPriority(s, text) };
 }
 
 // ---------- วิเคราะห์ด้วย LLM จริง (Edge Function analyze-voc) + fallback เป็น rule ----------
@@ -161,7 +187,7 @@ function fromLLM(d: any, text: string, channel: string | undefined, model?: stri
     conf: d.confidence ?? 70,
     uncertain: !!d.uncertain,
     reason: d.reason || 'วิเคราะห์โดย LLM',
-    journey: d.journey ?? aiJourney(text),
+    journey: d.journey ?? aiJourney(text, channel),
     catProduct: d.catProduct ?? catProd(text),
     catSales: d.catSales ?? catSal(text),
     owner: d.owner ?? ownerFor(text, channel),
