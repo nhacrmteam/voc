@@ -40,10 +40,25 @@ function mini(text: string, channel: string): Analyzed {
     : (channel === 'complain' || has(['ร้องเรียน', 'ข้อเสนอแนะ'])) ? 'ฝ่ายสื่อสารองค์กร'
     : 'ฝ่ายการตลาด';
   const priority = sentiment === 'Negative' ? (has(['ด่วน', 'อันตราย', 'ไม่ปลอดภัย', 'หลายวัน']) ? 'High' : 'Medium') : 'Low';
+  // Customer Journey — ดูประเด็นในข้อความก่อน ถ้ากำกวมใช้ช่องทางต้นทางช่วย
+  const CH_JR: Record<string, string> = {
+    social: 'Awareness', web: 'Consideration', sales: 'Consideration',
+    hq: 'Service', branch: 'Service', call: 'Service', complain: 'Service', survey: 'Loyalty',
+  };
+  const journey =
+    has(['ยกเลิกสัญญา', 'ขอคืนเงิน', 'ย้ายออก', 'เลิกใช้']) ? 'Win Back'
+    : has(['แนะนำต่อ', 'บอกต่อ', 'ซื้อเพิ่ม', 'ประทับใจ', 'ชื่นชม']) ? 'Loyalty'
+    // คำถาม ("อยากทราบเงื่อนไขเช่าซื้อ") ต้องมาก่อน Purchase ไม่งั้นถูกจัดเป็นการซื้อผิด ๆ
+    : has(['สอบถาม', 'เงื่อนไข', 'อยากทราบ', 'อยากรู้', 'เปรียบเทียบ', 'สนใจ']) ? 'Consideration'
+    : has(['โอนกรรมสิทธิ์', 'ทำสัญญา', 'ยื่นกู้', 'วางดาวน์', 'ระบบจอง', 'จองสิทธิ์', 'ใบจอง', 'นัดโอน']) ? 'Purchase'
+    : has(['แจ้งซ่อม', 'ร้องเรียน', 'ส่วนกลาง', 'ชำรุด', 'ซ่อม', 'ประปา', 'ค่างวด', 'ค่าเช่า', 'ลิฟต์']) ? 'Service'
+    : has(['เช่าซื้อ', 'ดาวน์', 'จอง', 'ราคา']) ? 'Purchase'
+    : has(['โฆษณา', 'ประชาสัมพันธ์', 'เพจ', 'รู้จัก']) ? 'Awareness'
+    : (CH_JR[channel] ?? 'Service');
   return {
     sentiment, conf, uncertain, owner, priority,
     reason: total === 0 ? 'ไม่พบคำบ่งชี้อารมณ์ชัดเจน (รับจาก API)' : uncertain ? 'สัญญาณผสม — ควรให้เจ้าหน้าที่ยืนยัน (รับจาก API)' : 'วิเคราะห์อัตโนมัติตอนรับจาก API',
-    journey: null, catProduct: null, catSales: null,
+    journey, catProduct: null, catSales: null,
     engine: 'rule', model: null,
   };
 }
