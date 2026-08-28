@@ -4,7 +4,8 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import type { Voc } from '../../lib/data';
-import { CHANNELS, PROJECT_TYPES } from '../../lib/data';
+import { CHANNELS, PROJECT_TYPES, JOURNEY_TH, JOURNEY_COLOR, journeyLabel } from '../../lib/data';
+import { scoreTopics, scoreBand, type TopicScore } from '../../lib/priority';
 import { computeCloud } from '../../lib/cloud';
 import WordCloud from '../components/WordCloud';
 import TrendChart from '../components/TrendChart';
@@ -102,6 +103,9 @@ export default function ChannelsView({ rows }: { rows: Voc[] }) {
     (ptype === 'all' || r.projectType === ptype) &&
     (!projQ || (r.project || '').toLowerCase().includes(projQ))
   ), [rows, allTime, range.from, range.to, ptype, projQ]);
+
+  // คะแนนความสำคัญรายประเด็น — คิดจากข้อมูลทั้งหมด (ไม่ผันตามตัวกรอง) ให้ตรงกับหน้าจัดลำดับ
+  const scores = useMemo(() => scoreTopics(rows), [rows]);
 
   const stats = useMemo(() => CHANNELS.map(name => {
     const r = fr.filter(x => x.channel === name);
@@ -220,13 +224,13 @@ export default function ChannelsView({ rows }: { rows: Voc[] }) {
         </div>
 
         {/* ===== รายละเอียดเฉพาะช่องทาง (แสดงด้านล่างเมื่อเลือก) ===== */}
-        {sel && <ChannelDetail key={sel} rows={fr.filter(r => r.channel === sel)} name={sel} onBack={() => setSel(null)} />}
+        {sel && <ChannelDetail key={sel} rows={fr.filter(r => r.channel === sel)} scores={scores} name={sel} onBack={() => setSel(null)} />}
       </div>
     </>
   );
 }
 
-function ChannelDetail({ rows, name, onBack }: { rows: Voc[]; name: string; onBack: () => void }) {
+function ChannelDetail({ rows, scores, name, onBack }: { rows: Voc[]; scores: Map<string, TopicScore>; name: string; onBack: () => void }) {
   // แหล่งที่มาในช่องทาง (เช่น Social → Facebook / Line OA)
   const allSources = Array.from(new Set(rows.map(r => r.source).filter(Boolean))) as string[];
   const [source, setSource] = useState('all');
@@ -305,10 +309,10 @@ function ChannelDetail({ rows, name, onBack }: { rows: Voc[]; name: string; onBa
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
             {/* Customer Journey — แท่งแนวนอน */}
             <div className="card">
-              <h3>การกระจายตาม Customer Journey</h3>
+              <h3>การกระจายตามเส้นทางลูกค้า (Customer Journey)</h3>
               {journey.map(([k, v]) => (
                 <div key={k} style={{ margin: '9px 0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 3 }}><span>{k}</span><span style={{ fontWeight: 600, color: '#1f3a93' }}>{v}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13, marginBottom: 3 }}><span>{journeyLabel(k)}</span><span style={{ fontWeight: 600, color: '#1f3a93' }}>{v}</span></div>
                   <div style={{ height: 8, background: '#eef2f7', borderRadius: 6 }}><div style={{ width: Math.round(v / jmax * 100) + '%', height: '100%', background: '#2e6cf0', borderRadius: 6 }} /></div>
                 </div>
               ))}
@@ -353,16 +357,26 @@ function ChannelDetail({ rows, name, onBack }: { rows: Voc[]; name: string; onBa
           <div className="card">
             <h3>รายการ VOC ของช่องทางนี้{source !== 'all' ? ` · ${source}` : ''}</h3>
             <table>
-              <thead><tr><th>รหัส</th><th>แหล่ง</th><th>ประเด็น / เสียงลูกค้า</th><th>Sentiment</th><th>สถานะ</th></tr></thead>
-              <tbody>{view.slice(0, 20).map(r => (
-                <tr key={r.id}>
-                  <td style={{ whiteSpace: 'nowrap' }}><Link href={'/voc/' + r.id} className="tag">{r.ref}</Link></td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{r.source}</td>
-                  <td><b>{r.topic}</b><div style={{ color: 'var(--muted)' }}>{r.voice}</div></td>
-                  <td style={{ whiteSpace: 'nowrap', color: SENT_COLOR[r.sentiment], fontWeight: 600 }}>{SENT_TH[r.sentiment]}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{r.status}</td>
-                </tr>
-              ))}</tbody>
+              <thead><tr><th>รหัส</th><th>แหล่ง</th><th>ประเด็น / เสียงลูกค้า</th><th>เส้นทางลูกค้า</th><th>Sentiment</th><th>ระดับเฝ้าระวัง</th></tr></thead>
+              <tbody>{view.slice(0, 20).map(r => {
+                const sc = scores.get(r.topic);
+                const band = sc ? scoreBand(sc.score) : null;
+                return (
+                  <tr key={r.id}>
+                    <td style={{ whiteSpace: 'nowrap' }}><Link href={'/voc/' + r.id} className="tag">{r.ref}</Link></td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{r.source}</td>
+                    <td><b>{r.topic}</b><div style={{ color: 'var(--muted)' }}>{r.voice}</div></td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{r.journey
+                      ? <span className="pill" title={journeyLabel(r.journey)} style={{ background: (JOURNEY_COLOR[r.journey] || {}).bg, color: (JOURNEY_COLOR[r.journey] || {}).fg }}>{JOURNEY_TH[r.journey] || r.journey}</span>
+                      : <span style={{ color: 'var(--muted)' }}>-</span>}</td>
+                    <td style={{ whiteSpace: 'nowrap', color: SENT_COLOR[r.sentiment], fontWeight: 600 }}>{SENT_TH[r.sentiment]}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{band
+                      ? <><span className={'pill ' + band.cls}>{band.label}</span>
+                          <span style={{ color: 'var(--muted)', fontSize: 11.5, marginLeft: 6 }}>{sc!.score.toFixed(2)}</span></>
+                      : <span style={{ color: 'var(--muted)' }}>-</span>}</td>
+                  </tr>
+                );
+              })}</tbody>
             </table>
           </div>
         </>
