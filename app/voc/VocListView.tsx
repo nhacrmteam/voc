@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import type { Voc } from '../../lib/data';
-import { CHANNELS, PROJECT_TYPES } from '../../lib/data';
+import { CHANNELS, PROJECT_TYPES, JOURNEYS, JOURNEY_TH, JOURNEY_COLOR, journeyLabel } from '../../lib/data';
 import { computeCloud } from '../../lib/cloud';
 import WordCloud from '../components/WordCloud';
 
@@ -35,6 +35,7 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
   const [ptype, setPtype] = useState('all');
   const [projText, setProjText] = useState('');
   const [channel, setChannel] = useState('all');
+  const [journey, setJourney] = useState('all');
   const [q, setQ] = useState(initialQ);
   useEffect(() => { const c = currentFYQuarter(); setMaxFY(c.be); setBeYear(c.be); setQuarter(c.q); }, []);
   const YEARS = [maxFY, maxFY - 1, maxFY - 2];
@@ -58,8 +59,16 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
     (ptype === 'all' || r.projectType === ptype) &&
     (!projQ || (r.project || '').toLowerCase().includes(projQ)) &&
     (channel === 'all' || r.channel === channel) &&
+    (journey === 'all' || r.journey === journey) &&
     (!qq || (r.voice + r.topic + r.ref + r.owner + r.project).toLowerCase().includes(qq))
-  ), [rows, allTime, range.from, range.to, ptype, projQ, channel, qq]);
+  ), [rows, allTime, range.from, range.to, ptype, projQ, channel, journey, qq]);
+
+  // จำนวนต่อขั้น (นับจากชุดก่อนกรอง journey) — ใช้โชว์ในตัวเลือก
+  const jrCount = useMemo(() => {
+    const m: Record<string, number> = {};
+    rows.forEach(r => { if (r.journey) m[r.journey] = (m[r.journey] || 0) + 1; });
+    return m;
+  }, [rows]);
 
   // ประเด็นซ้ำ (recurring) — นับหัวข้อในชุดที่กรอง
   const topicCount = useMemo(() => {
@@ -70,15 +79,15 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
 
   function clearAll() {
     const c = currentFYQuarter(); setBeYear(c.be); setQuarter(c.q);
-    setPtype('all'); setProjText(''); setChannel('all'); setQ('');
+    setPtype('all'); setProjText(''); setChannel('all'); setJourney('all'); setQ('');
   }
-  const hasFilter = ptype !== 'all' || projText || channel !== 'all' || q || allTime;
+  const hasFilter = ptype !== 'all' || projText || channel !== 'all' || journey !== 'all' || q || allTime;
 
   return (
     <>
       <header className="top">
         <h1>รายการเสียงลูกค้า (VOC)</h1>
-        <div className="sub">ค้นหา + ตัวกรอง (ปีงบ/ไตรมาส/ประเภทโครงการ/ชื่อโครงการ/ช่องทาง) + Word Cloud</div>
+        <div className="sub">ค้นหา + ตัวกรอง (ปีงบ/ไตรมาส/ประเภทโครงการ/ชื่อโครงการ/ช่องทาง/เส้นทางลูกค้า) + Word Cloud</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
           <select style={sel} value={beYear} onChange={e => setBeYear(Number(e.target.value))}>
             <option value={0}>ทั้งหมด (ตั้งแต่มีระบบ)</option>
@@ -102,6 +111,12 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
             <option value="all">ทุกช่องทาง</option>
             {CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+          <select style={sel} value={journey} onChange={e => setJourney(e.target.value)}>
+            <option value="all">ทุกขั้นเส้นทางลูกค้า</option>
+            {JOURNEYS.map(j => (
+              <option key={j} value={j}>{JOURNEY_TH[j]} ({j}){jrCount[j] ? ' · ' + jrCount[j] : ''}</option>
+            ))}
+          </select>
         </div>
       </header>
 
@@ -117,13 +132,40 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
               placeholder="🔎 ค้นหาข้อความ เช่น จอง, ซ่อม, สินเชื่อ..." />
             {hasFilter && <button className="btn" style={{ background: '#64748b' }} onClick={clearAll}>ล้างตัวกรอง</button>}
           </div>
-          <div className="sub" style={{ marginBottom: 10 }}>พบ {fr.length.toLocaleString()} รายการ</div>
+          <div className="sub" style={{ marginBottom: 8 }}>พบ {fr.length.toLocaleString()} รายการ</div>
+
+          {/* สรุปตามขั้นเส้นทางลูกค้า — คลิกเพื่อกรอง */}
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 12 }}>
+            {JOURNEYS.map(j => {
+              const c = JOURNEY_COLOR[j];
+              const on = journey === j;
+              return (
+                <button key={j} type="button" title={journeyLabel(j)}
+                  onClick={() => setJourney(on ? 'all' : j)}
+                  style={{
+                    border: '1px solid ' + (on ? c.fg : 'var(--line)'), background: on ? c.bg : 'transparent',
+                    color: on ? c.fg : 'inherit', borderRadius: 20, padding: '4px 12px', fontSize: 12,
+                    fontFamily: 'inherit', cursor: 'pointer', fontWeight: on ? 700 : 500,
+                  }}>
+                  <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: c.fg, marginRight: 6 }} />
+                  {JOURNEY_TH[j]} <b>{jrCount[j] || 0}</b>
+                </button>
+              );
+            })}
+          </div>
           <table>
-            <thead><tr><th>รหัส</th><th>ช่องทาง</th><th>ประเภทโครงการ</th><th>โครงการ</th><th>หัวข้อ</th><th>เสียงลูกค้า</th><th>Sentiment</th><th>ความรุนแรง</th><th>ฝ่ายที่เกี่ยวข้อง</th></tr></thead>
+            <thead><tr><th>รหัส</th><th>ช่องทาง</th><th>เส้นทางลูกค้า</th><th>ประเภทโครงการ</th><th>โครงการ</th><th>หัวข้อ</th><th>เสียงลูกค้า</th><th>Sentiment</th><th>ความรุนแรง</th><th>ฝ่ายที่เกี่ยวข้อง</th></tr></thead>
             <tbody>{fr.map(r => (
               <tr key={r.id}>
                 <td><Link href={'/voc/' + r.id} className="tag">{r.ref}</Link></td>
-                <td>{r.channel}</td><td>{r.projectType}</td><td>{r.project}</td>
+                <td>{r.channel}</td>
+                <td>{r.journey
+                  ? <span className="pill" title={journeyLabel(r.journey)}
+                      style={{ background: (JOURNEY_COLOR[r.journey] || {}).bg || '#f1f5f9', color: (JOURNEY_COLOR[r.journey] || {}).fg || '#475569', whiteSpace: 'nowrap' }}>
+                      {JOURNEY_TH[r.journey] || r.journey}
+                    </span>
+                  : <span style={{ color: 'var(--muted)', fontSize: 12 }}>-</span>}</td>
+                <td>{r.projectType}</td><td>{r.project}</td>
                 <td>{r.topic}{topicCount[r.topic] >= 3 && <span title={`ประเด็นซ้ำ ${topicCount[r.topic]} ครั้ง`} style={{ marginLeft: 6, fontSize: 11, color: '#b45309', background: '#fef3c7', borderRadius: 20, padding: '1px 7px' }}>🔁 ซ้ำ {topicCount[r.topic]}</span>}</td>
                 <td style={{ maxWidth: 240, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.voice}>{r.voice}</td>
                 <td><span className={'pill ' + (r.sentiment === 'Positive' ? 'p-pos' : r.sentiment === 'Negative' ? 'p-neg' : 'p-neu')}>{r.sentiment}</span></td>
