@@ -247,6 +247,11 @@ function ChannelDetail({ rows, scores, name, onBack }: { rows: Voc[]; scores: Ma
   const jr: Record<string, number> = {}; view.forEach(r => { if (r.journey) jr[r.journey] = (jr[r.journey] || 0) + 1; });
   const journey = Object.entries(jr).sort((a, b) => b[1] - a[1]);
   const jmax = Math.max(...journey.map(j => j[1]), 1);
+  // จุดแข็ง — ประเด็นที่ได้เสียงเชิงบวกมากที่สุดในช่องทางนี้
+  const st: Record<string, { c: number; pos: number }> = {};
+  view.forEach(r => { if (!r.topic) return; st[r.topic] ||= { c: 0, pos: 0 }; st[r.topic].c++; if (r.sentiment === 'Positive') st[r.topic].pos++; });
+  const strongTopics = Object.entries(st).filter(([, o]) => o.pos > 0).sort((a, b) => b[1].pos - a[1].pos).slice(0, 6);
+
   const tp: Record<string, number> = {}; view.forEach(r => { if (r.topic) tp[r.topic] = (tp[r.topic] || 0) + 1; });
   const topTopics = Object.entries(tp).sort((a, b) => b[1] - a[1]).slice(0, 6);
   const tmax = Math.max(...topTopics.map(t => t[1]), 1);
@@ -314,6 +319,23 @@ function ChannelDetail({ rows, scores, name, onBack }: { rows: Voc[]; scores: Ma
                 <div key={k} style={{ margin: '9px 0' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13, marginBottom: 3 }}><span>{journeyLabel(k)}</span><span style={{ fontWeight: 600, color: '#1f3a93' }}>{v}</span></div>
                   <div style={{ height: 8, background: '#eef2f7', borderRadius: 6 }}><div style={{ width: Math.round(v / jmax * 100) + '%', height: '100%', background: '#2e6cf0', borderRadius: 6 }} /></div>
+                </div>
+              ))}
+            </div>
+            {/* จุดแข็งของช่องทางนี้ — เสียงเชิงบวกที่ควรขยายผล */}
+            <div className="card">
+              <h3>🌟 จุดแข็งที่ลูกค้าชื่นชมในช่องทางนี้</h3>
+              {strongTopics.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--muted)' }}>ยังไม่มีเสียงเชิงบวกในช่องทาง/แหล่งนี้</div>
+              ) : strongTopics.map(([k, o]) => (
+                <div key={k} style={{ margin: '9px 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13, marginBottom: 3 }}>
+                    <span>{k}</span>
+                    <span style={{ fontWeight: 600, color: '#15803d', whiteSpace: 'nowrap' }}>{o.pos} บวก <span style={{ color: 'var(--muted)', fontWeight: 400 }}>/ {o.c}</span></span>
+                  </div>
+                  <div style={{ height: 8, background: '#dcfce7', borderRadius: 6 }}>
+                    <div style={{ width: Math.round(o.pos / o.c * 100) + '%', height: '100%', background: '#16a34a', borderRadius: 6 }} />
+                  </div>
                 </div>
               ))}
             </div>
