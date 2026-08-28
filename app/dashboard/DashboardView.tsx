@@ -139,6 +139,10 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
   const negTopic: Record<string, { c: number; neg: number }> = {};
   f.forEach(r => { negTopic[r.topic] ||= { c: 0, neg: 0 }; negTopic[r.topic].c++; if (r.sentiment === 'Negative') negTopic[r.topic].neg++; });
   const watch = Object.entries(negTopic).filter(([, o]) => o.neg > 0).sort((a, b) => b[1].neg - a[1].neg).slice(0, 5);
+  // จุดแข็ง — ประเด็นที่ได้เสียงเชิงบวกมากที่สุด (ระบบฟังทั้งสองด้าน ไม่ใช่แค่เสียงลบ)
+  const posTopic: Record<string, { c: number; pos: number }> = {};
+  f.forEach(r => { posTopic[r.topic] ||= { c: 0, pos: 0 }; posTopic[r.topic].c++; if (r.sentiment === 'Positive') posTopic[r.topic].pos++; });
+  const strong = Object.entries(posTopic).filter(([, o]) => o.pos > 0).sort((a, b) => b[1].pos - a[1].pos).slice(0, 5);
   const projAgg: Record<string, number> = {};
   f.forEach(r => { if (r.project) projAgg[r.project] = (projAgg[r.project] || 0) + 1; });
   const topProjects = Object.entries(projAgg).sort((a, b) => b[1] - a[1]).slice(0, 5);
@@ -245,6 +249,24 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
                 </div>
               </div>
             ))}
+          </div>
+          <div className="card" style={{ marginBottom: 0 }}>
+            <h3>🌟 จุดแข็งที่ลูกค้าชื่นชม</h3>
+            {strong.length === 0 && <div style={{ fontSize: 13, color: 'var(--muted)' }}>ไม่มีเสียงเชิงบวกในช่วง/ตัวกรองนี้</div>}
+            {strong.map(([t, o]) => (
+              <div key={t} style={{ padding: '7px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                  <Link href={'/voc?q=' + encodeURIComponent(t)} style={{ fontWeight: 600 }}>{t}</Link>
+                  <span style={{ color: 'var(--green)', fontWeight: 700, whiteSpace: 'nowrap' }}>{o.pos} บวก</span>
+                </div>
+                <div style={{ height: 6, background: '#dcfce7', borderRadius: 6, marginTop: 4 }}>
+                  <div style={{ width: Math.round(o.pos / o.c * 100) + '%', height: '100%', background: '#16a34a', borderRadius: 6 }} />
+                </div>
+              </div>
+            ))}
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8 }}>
+              <Link href="/prioritize" style={{ color: 'var(--blue)' }}>ดูตารางจุดแข็งแบบถ่วงน้ำหนัก →</Link>
+            </div>
           </div>
           <div className="card" style={{ marginBottom: 0 }}>
             <h3>🏠 Top ชื่อโครงการที่มีเสียงลูกค้าสูงสุด</h3>
