@@ -4,9 +4,6 @@ import { aiSentiment } from './ai';
 
 export type Sentiment = 'Positive' | 'Neutral' | 'Negative';
 export type Priority = 'High' | 'Medium' | 'Low';
-export type CaseStatus =
-  | 'รับเรื่อง' | 'ส่งต่อหน่วยงานที่รับผิดชอบ' | 'กำลังดำเนินการ'
-  | 'รอข้อมูลเพิ่มเติม' | 'ติดตามผล' | 'ดำเนินการเสร็จ/ปิดเรื่อง';
 
 export interface Voc {
   id: string; ref: string;
@@ -14,7 +11,7 @@ export interface Voc {
   project: string; projectType: string;
   journey: string; topic: string; voice: string;
   sentiment: Sentiment; priority: Priority;
-  owner: string; status: CaseStatus;
+  owner: string;
   occurredAt: string; importedAt: string; imported: boolean;
   catProduct: string; catSales: string;
   sentConf: number; sentUncertain: boolean; sentManual: boolean; sentReason: string;
@@ -35,7 +32,7 @@ export const JOURNEY_TH: Record<string, string> = {
   Purchase: 'การซื้อ/ทำสัญญา',
   Service: 'การใช้บริการ',
   Loyalty: 'ความผูกพัน',
-  'Win Back': 'การดึงกลับ',
+  'Win Back': 'การดึงลูกค้าเก่ากลับมา',
 };
 // คำอธิบายสั้น ๆ ว่าแต่ละขั้นหมายถึงเสียงลูกค้าแบบไหน (ใช้เป็น tooltip/คำโปรย)
 export const JOURNEY_DESC: Record<string, string> = {
@@ -74,10 +71,6 @@ export const DEPT_GROUPS: { group: string; depts: string[] }[] = [
 ];
 // รายชื่อฝ่ายแบบเรียง (flat) — ใช้กับ dropdown / การจับคู่อัตโนมัติ
 export const DEPTS = DEPT_GROUPS.flatMap(g => g.depts);
-export const CASE_STATUS: CaseStatus[] = [
-  'รับเรื่อง', 'ส่งต่อหน่วยงานที่รับผิดชอบ', 'กำลังดำเนินการ',
-  'รอข้อมูลเพิ่มเติม', 'ติดตามผล', 'ดำเนินการเสร็จ/ปิดเรื่อง'
-];
 
 // ---------- MOCK (ใช้เมื่อยังไม่ตั้งค่า Supabase) ----------
 const VOICES = [
@@ -116,7 +109,7 @@ const MOCK: Voc[] = Array.from({ length: 60 }, (_, i) => {
     project: pick(MOCK_PROJECTS, i), projectType: projectTypeOf(pick(MOCK_PROJECTS, i)),
     journey: pick(['Awareness', 'Consideration', 'Purchase', 'Service', 'Loyalty', 'Win Back'], i),
     topic: v.topic, voice: v.voice, sentiment: v.sent, priority: prio,
-    owner: v.owner, status: pick(CASE_STATUS, i),
+    owner: v.owner,
     occurredAt: `${mm}-${String(day).padStart(2, '0')}`,
     importedAt: imported ? '2026-06-26' : `${mm}-${String(day).padStart(2, '0')}`,
     imported, catProduct: v.cat, catSales: 'การให้ข้อมูลโครงการ',
@@ -136,7 +129,7 @@ function mapRow(r: any): Voc {
     project: proj?.name ?? '', projectType: proj?.project_type ?? '',
     journey: r.journey_stage ?? '', topic: r.topic ?? '', voice: r.raw_text ?? '',
     sentiment: (a.sentiment ?? 'Neutral') as Sentiment, priority: (a.priority ?? 'Low') as Priority,
-    owner: r.owner_dept ?? '', status: (r.status ?? 'รับเรื่อง') as CaseStatus,
+    owner: r.owner_dept ?? '',
     occurredAt: r.occurred_at ?? '', importedAt: r.imported_at ?? r.occurred_at ?? '',
     imported: !!r.is_imported, catProduct: a.cat_product ?? '', catSales: a.cat_sales ?? '',
     sentConf: a.sentiment_confidence ?? 0, sentUncertain: (a.sentiment_confidence ?? 100) <= 50 && !a.sentiment_manual,
@@ -177,45 +170,6 @@ export async function getVOC(id: string): Promise<Voc | undefined> {
   return (await fetchAll()).find(x => x.id === id);
 }
 
-// ---------- Timeline การดำเนินการ (action_log) ----------
-export interface ActionItem { text: string; status: string; by: string; at: string }
-export async function getTimeline(voc: Voc): Promise<ActionItem[]> {
-  if (hasSupabase && supabase) {
-    const { data, error } = await supabase
-      .from('action_log')
-      .select('action_text, status, acted_at, profiles(full_name)')
-      .eq('voc_id', voc.id)
-      .order('acted_at', { ascending: true });
-    if (!error && data && data.length) {
-      return data.map((r: any) => ({
-        text: r.action_text, status: r.status ?? '',
-        by: (Array.isArray(r.profiles) ? r.profiles[0] : r.profiles)?.full_name ?? 'เจ้าหน้าที่',
-        at: (r.acted_at ?? '').slice(0, 16).replace('T', ' '),
-      }));
-    }
-  }
-  // mock: สร้าง timeline ตามลำดับสถานะจนถึงสถานะปัจจุบัน
-  const idx = CASE_STATUS.indexOf(voc.status);
-  const TEXT: Record<CaseStatus, string> = {
-    'รับเรื่อง': 'ระบบรับเรื่องจากช่องทาง ' + voc.channel,
-    'ส่งต่อหน่วยงานที่รับผิดชอบ': 'แอดมินส่งต่อเรื่องไปยัง ' + (voc.owner || 'หน่วยงานที่รับผิดชอบ'),
-    'กำลังดำเนินการ': 'หน่วยงานรับเรื่องและเริ่มดำเนินการ',
-    'รอข้อมูลเพิ่มเติม': 'ขอข้อมูลเพิ่มเติมจากลูกค้า/หน่วยงาน',
-    'ติดตามผล': 'แอดมินติดตามความคืบหน้าจากหน่วยงาน',
-    'ดำเนินการเสร็จ/ปิดเรื่อง': 'ดำเนินการแล้วเสร็จ แจ้งผลและปิดเรื่อง',
-  };
-  return CASE_STATUS.slice(0, idx + 1).map((s, i) => ({
-    text: TEXT[s], status: s, by: i === 0 ? 'ระบบ' : 'แอดมิน VOC',
-    at: voc.occurredAt + (i ? ` (+${i} วัน)` : ''),
-  }));
-}
-
-export async function pipelineStats(): Promise<Record<string, number>> {
-  const all = await fetchAll();
-  const st: Record<string, number> = {}; CASE_STATUS.forEach(s => (st[s] = 0));
-  all.forEach(x => (st[x.status] = (st[x.status] || 0) + 1));
-  return st;
-}
 export async function sentimentStats() {
   const all = await fetchAll(); const t = all.length || 1;
   const c = { Positive: 0, Neutral: 0, Negative: 0 };
