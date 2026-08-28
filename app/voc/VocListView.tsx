@@ -37,6 +37,8 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
   const [channel, setChannel] = useState('all');
   const [journey, setJourney] = useState('all');
   const [q, setQ] = useState(initialQ);
+  const [page, setPage] = useState(1);
+  const PER = 50;   // แถวต่อหน้า — ข้อมูลจริงหลักพันจะไม่ทำให้หน้าหน่วง
   useEffect(() => { const c = currentFYQuarter(); setMaxFY(c.be); setBeYear(c.be); setQuarter(c.q); }, []);
   const YEARS = [maxFY, maxFY - 1, maxFY - 2];
 
@@ -62,6 +64,11 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
     (journey === 'all' || r.journey === journey) &&
     (!qq || (r.voice + r.topic + r.ref + r.owner + r.project).toLowerCase().includes(qq))
   ), [rows, allTime, range.from, range.to, ptype, projQ, channel, journey, qq]);
+
+  // เปลี่ยนตัวกรอง/คำค้น → กลับไปหน้าแรกเสมอ ไม่งั้นจะค้างอยู่หน้าที่ไม่มีข้อมูล
+  useEffect(() => { setPage(1); }, [beYear, quarter, ptype, projQ, channel, journey, qq]);
+  const pageCount = Math.max(1, Math.ceil(fr.length / PER));
+  const pageRows = fr.slice((page - 1) * PER, page * PER);
 
   // จำนวนต่อขั้น (นับจากชุดก่อนกรอง journey) — ใช้โชว์ในตัวเลือก
   const jrCount = useMemo(() => {
@@ -132,7 +139,10 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
               placeholder="🔎 ค้นหาข้อความ เช่น จอง, ซ่อม, สินเชื่อ..." />
             {hasFilter && <button className="btn" style={{ background: '#64748b' }} onClick={clearAll}>ล้างตัวกรอง</button>}
           </div>
-          <div className="sub" style={{ marginBottom: 8 }}>พบ {fr.length.toLocaleString()} รายการ</div>
+          <div className="sub" style={{ marginBottom: 8 }}>
+            พบ {fr.length.toLocaleString()} รายการ
+            {fr.length > PER && <> · แสดง {((page - 1) * PER + 1).toLocaleString()}–{Math.min(page * PER, fr.length).toLocaleString()}</>}
+          </div>
 
           {/* สรุปตามขั้นเส้นทางลูกค้า — คลิกเพื่อกรอง */}
           <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -155,7 +165,7 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
           </div>
           <table>
             <thead><tr><th>รหัส</th><th>ช่องทาง</th><th>เส้นทางลูกค้า</th><th>ประเภทโครงการ</th><th>โครงการ</th><th>หัวข้อ</th><th>เสียงลูกค้า</th><th>Sentiment</th><th>ความรุนแรง</th><th>ฝ่ายที่เกี่ยวข้อง</th></tr></thead>
-            <tbody>{fr.map(r => (
+            <tbody>{pageRows.map(r => (
               <tr key={r.id}>
                 <td><Link href={'/voc/' + r.id} className="tag">{r.ref}</Link></td>
                 <td>{r.channel}</td>
@@ -175,6 +185,33 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
             </tbody>
           </table>
           {fr.length === 0 && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>ไม่พบรายการตามตัวกรองนี้</div>}
+
+          {/* แบ่งหน้า */}
+          {pageCount > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
+              <button style={{ ...sel, cursor: 'pointer' }} disabled={page === 1} onClick={() => setPage(1)}>« แรก</button>
+              <button style={{ ...sel, cursor: 'pointer' }} disabled={page === 1} onClick={() => setPage(p => p - 1)}>‹ ก่อนหน้า</button>
+              {/* หมายเลขหน้ารอบ ๆ หน้าปัจจุบัน */}
+              {Array.from({ length: pageCount }, (_, i) => i + 1)
+                .filter(n => n === 1 || n === pageCount || Math.abs(n - page) <= 2)
+                .map((n, i, arr) => (
+                  <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {i > 0 && arr[i - 1] !== n - 1 && <span style={{ color: 'var(--muted)' }}>…</span>}
+                    <button onClick={() => setPage(n)}
+                      style={{
+                        ...sel, cursor: 'pointer', minWidth: 38, textAlign: 'center',
+                        background: n === page ? 'var(--blue)' : 'var(--card,#fff)',
+                        color: n === page ? '#fff' : 'inherit',
+                        borderColor: n === page ? 'var(--blue)' : 'var(--line)',
+                        fontWeight: n === page ? 700 : 400,
+                      }}>{n}</button>
+                  </span>
+                ))}
+              <button style={{ ...sel, cursor: 'pointer' }} disabled={page === pageCount} onClick={() => setPage(p => p + 1)}>ถัดไป ›</button>
+              <button style={{ ...sel, cursor: 'pointer' }} disabled={page === pageCount} onClick={() => setPage(pageCount)}>ท้าย »</button>
+              <span style={{ fontSize: 12.5, color: 'var(--muted)', marginLeft: 4 }}>หน้า {page} / {pageCount}</span>
+            </div>
+          )}
         </div>
       </div>
     </>
