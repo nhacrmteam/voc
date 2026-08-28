@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Voc } from '../../lib/data';
 import { PROJECT_TYPES } from '../../lib/data';
+import { scoreStrengths, strengthBand } from '../../lib/priority';
 
 const SENT_TH: Record<string, string> = { Positive: 'เชิงบวก', Neutral: 'เป็นกลาง', Negative: 'เชิงลบ' };
 const QUARTERS = [
@@ -128,6 +129,26 @@ export default function ReportClient({ rows }: { rows: Voc[] }) {
     return { cols: ['ประเด็น', 'จำนวนครั้ง', 'เชิงลบ', 'ช่องทางที่พบ'], rows: rowsOut };
   }
 
+  // จุดแข็ง/คำชม — ระบบ VOC ฟังทั้งสองด้าน ไม่ใช่เฉพาะเสียงลบ
+  function repStrength(): Table {
+    const rowsOut = scoreStrengths(fr).map((x, i) => [
+      i + 1, x.topic, x.posCount, x.count, pct(x.posCount, x.count),
+      x.fl, x.pl, x.tl, x.al, x.score.toFixed(2), strengthBand(x.score).label, x.owner || '-',
+    ]);
+    return {
+      cols: ['อันดับ', 'ประเด็น', 'เสียงบวก', 'ทั้งหมด', '%บวก', 'ความถี่', 'ความเข้มบวก', 'แนวโน้ม', 'การบอกต่อ', 'คะแนน', 'ระดับ', 'ฝ่ายที่ควรได้รับคำชม'],
+      rows: rowsOut,
+    };
+  }
+  // คำชมรายเรื่อง — ใช้ส่งให้หน่วยงานดูข้อความจริงที่ลูกค้าชม
+  function repPraise(): Table {
+    return {
+      cols: ['รหัส', 'ช่องทาง', 'โครงการ', 'ประเด็น', 'ข้อความที่ลูกค้าชม', 'ฝ่ายที่เกี่ยวข้อง', 'วันที่เกิดเรื่อง'],
+      rows: fr.filter(r => r.sentiment === 'Positive')
+        .map(r => [r.ref, r.channel, r.project, r.topic, r.voice, r.owner, r.occurredAt]),
+    };
+  }
+
   const REPORTS: { icon: string; name: string; desc: string; title: string; build: () => Table }[] = [
     { icon: '📊', name: 'รายงานสรุปผู้บริหาร', desc: 'ภาพรวมเสียงลูกค้า สัดส่วน และประเด็นเด่น สำหรับนำเสนอผู้บริหาร', title: 'รายงานสรุปผู้บริหาร', build: repExec },
     { icon: '💬', name: 'รายงานเสียงลูกค้าทั้งหมด', desc: 'ข้อมูล VOC รายเรื่อง พร้อมผล AI (Sentiment/ความรุนแรง/ฝ่าย)', title: 'รายงานเสียงลูกค้าทั้งหมด', build: repAll },
@@ -137,6 +158,8 @@ export default function ReportClient({ rows }: { rows: Voc[] }) {
     { icon: '🎯', name: 'รายงานแยกตามความรุนแรง', desc: 'จำนวนและสัดส่วนตามระดับความรุนแรง (High/Medium/Low)', title: 'รายงานแยกตามความรุนแรง', build: repByPriority },
     { icon: '🏢', name: 'รายงานแยกตามฝ่ายที่เกี่ยวข้อง', desc: 'ส่งให้แต่ละฝ่ายดูเฉพาะเสียงที่เกี่ยวกับตน', title: 'รายงานแยกตามฝ่ายที่เกี่ยวข้อง', build: () => repByGroup('ฝ่ายที่เกี่ยวข้อง', r => r.owner) },
     { icon: '🔁', name: 'รายงานประเด็นเฝ้าระวัง (ซ้ำ)', desc: 'ประเด็นที่เกิดซ้ำ ≥3 ครั้ง — ตามแนว monitoring', title: 'รายงานประเด็นเฝ้าระวัง', build: repRecurring },
+    { icon: '🌟', name: 'รายงานจุดแข็งที่ควรขยายผล', desc: 'ประเด็นที่ลูกค้าชื่นชม จัดอันดับด้วยโมเดล 4 ปัจจัยด้านบวก พร้อมฝ่ายที่ควรได้รับคำชม', title: 'รายงานจุดแข็งที่ควรขยายผล', build: repStrength },
+    { icon: '💚', name: 'รายงานคำชมรายเรื่อง', desc: 'ข้อความเชิงบวกทั้งหมดพร้อมต้นทาง — ส่งให้หน่วยงานอ่านคำชมจริงจากลูกค้า', title: 'รายงานคำชมรายเรื่อง', build: repPraise },
   ];
 
   return (
