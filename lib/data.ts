@@ -46,6 +46,15 @@ export const JOURNEY_DESC: Record<string, string> = {
   Loyalty: 'พอใจ ชื่นชม แนะนำต่อ อยากซื้อเพิ่ม',
   'Win Back': 'จะยกเลิก ย้ายออก คืนเงิน หรือเคยเลิกใช้แล้วติดต่อกลับมา',
 };
+// สีป้ายประจำขั้น (ไล่จากต้นทางสู่ปลายทาง) — ใช้ให้ตรงกันทุกหน้า
+export const JOURNEY_COLOR: Record<string, { bg: string; fg: string }> = {
+  Awareness: { bg: '#e0f2fe', fg: '#0369a1' },
+  Consideration: { bg: '#e0e7ff', fg: '#4338ca' },
+  Purchase: { bg: '#ede9fe', fg: '#6d28d9' },
+  Service: { bg: '#dcfce7', fg: '#15803d' },
+  Loyalty: { bg: '#fef3c7', fg: '#b45309' },
+  'Win Back': { bg: '#fee2e2', fg: '#b91c1c' },
+};
 /** แสดงชื่อขั้นเป็น "ไทย (English)" — ใช้ทุกหน้าให้ตรงกัน */
 export function journeyLabel(en: string): string {
   const th = JOURNEY_TH[en];
