@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { listVOC, CHANNELS } from '../../../lib/data';
+import { listVOC, CHANNELS, JOURNEY_TH, JOURNEY_COLOR, journeyLabel } from '../../../lib/data';
+import { scoreTopics, scoreBand } from '../../../lib/priority';
 import { computeCloud } from '../../../lib/cloud';
 import WordCloud from '../../components/WordCloud';
 import TrendChart from '../../components/TrendChart';
@@ -14,6 +15,8 @@ export default async function ChannelDetail({ params }: { params: { name: string
   const known = CHANNELS.includes(name);
   const rows = known ? await listVOC({ channel: name }) : [];
   const total = rows.length || 1;
+  // คะแนนความสำคัญคิดจากข้อมูลทั้งระบบ เพื่อให้ตรงกับหน้าจัดลำดับ
+  const scores = scoreTopics(await listVOC());
 
   const sent = { Positive: 0, Neutral: 0, Negative: 0 };
   rows.forEach(r => { sent[r.sentiment]++; });
@@ -103,10 +106,10 @@ export default async function ChannelDetail({ params }: { params: { name: string
 
               {/* Customer Journey */}
               <div className="card">
-                <h3>Customer Journey</h3>
+                <h3>เส้นทางลูกค้า (Customer Journey)</h3>
                 {journey.map(([k, v]) => (
-                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
-                    <span>{k}</span><span style={{ fontWeight: 600, color: '#1f3a93' }}>{v}</span>
+                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                    <span>{journeyLabel(k)}</span><span style={{ fontWeight: 600, color: '#1f3a93' }}>{v}</span>
                   </div>
                 ))}
               </div>
@@ -134,19 +137,29 @@ export default async function ChannelDetail({ params }: { params: { name: string
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ textAlign: 'left', color: '#64748b', borderBottom: '2px solid #eef2f7' }}>
-                    <th style={{ padding: '8px 6px' }}>รหัส</th><th>แหล่ง</th><th>ประเด็น / เสียงลูกค้า</th><th>Sentiment</th><th>สถานะ</th>
+                    <th style={{ padding: '8px 6px' }}>รหัส</th><th>แหล่ง</th><th>ประเด็น / เสียงลูกค้า</th><th>เส้นทางลูกค้า</th><th>Sentiment</th><th>ระดับเฝ้าระวัง</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.slice(0, 20).map(r => (
+                  {rows.slice(0, 20).map(r => {
+                    const sc = scores.get(r.topic);
+                    const band = sc ? scoreBand(sc.score) : null;
+                    return (
                     <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <td style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}><Link href={'/voc/' + r.id} style={{ color: '#2e6cf0' }}>{r.ref}</Link></td>
                       <td style={{ whiteSpace: 'nowrap' }}>{r.source}</td>
                       <td><b>{r.topic}</b><div style={{ color: '#64748b' }}>{r.voice}</div></td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{r.journey
+                        ? <span className="pill" title={journeyLabel(r.journey)} style={{ background: (JOURNEY_COLOR[r.journey] || {}).bg, color: (JOURNEY_COLOR[r.journey] || {}).fg }}>{JOURNEY_TH[r.journey] || r.journey}</span>
+                        : <span style={{ color: '#64748b' }}>-</span>}</td>
                       <td style={{ whiteSpace: 'nowrap', color: SENT_COLOR[r.sentiment], fontWeight: 600 }}>{SENT_TH[r.sentiment]}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{r.status}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{band
+                        ? <><span className={'pill ' + band.cls}>{band.label}</span>
+                            <span style={{ color: '#64748b', fontSize: 11.5, marginLeft: 6 }}>{sc!.score.toFixed(2)}</span></>
+                        : <span style={{ color: '#64748b' }}>-</span>}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
