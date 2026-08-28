@@ -5,6 +5,7 @@
 import Link from 'next/link';
 import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { JOURNEYS, projectTypeOf } from '../../lib/data';
 import { analyzeText, analyzeSmartBatch, applyScoreHint, SmartResult } from '../../lib/ai';
 
 // ช่องทาง 8 ช่อง (id ตรงตาราง channel ใน Supabase)
@@ -18,7 +19,6 @@ const CH = [
   { id: 'complain', name: 'ระบบร้องเรียน/ข้อเสนอแนะ', src: ['ระบบร้องเรียน'], realtime: false },
   { id: 'survey', name: 'แบบประเมินความพึงพอใจ', src: ['Google Forms', 'แบบสอบถามกระดาษ'], realtime: false },
 ];
-const JOURNEYS = ['Awareness', 'Consideration', 'Purchase', 'Service', 'Loyalty', 'Win Back'];
 const HEADERS = ['วันที่เกิดเรื่อง', 'หัวข้อ', 'ข้อความเสียงลูกค้า', 'แหล่งที่มา', 'Journey'];
 // ขั้นตอนใน wizard อัปโหลดไฟล์
 const STEPS: [number, string][] = [[1, 'ช่องทาง'], [2, 'อัปโหลด'], [3, 'ตรวจจับคอลัมน์'], [4, 'ตรวจ & บันทึก']];
@@ -65,6 +65,7 @@ const HKEY = {
   topic: ['หัวข้อ', 'ประเด็น', 'เรื่องที่', 'topic'],
   src: ['แหล่ง', 'ที่มา', 'ช่องทาง', 'source'],
   jr: ['journey', 'ขั้นตอน'],
+  proj: ['โครงการ', 'หมู่บ้าน', 'ชุมชน', 'project'],
 };
 function findCol(head: string[], keys: string[], skip: number[] = []): number {
   const low = head.map(h => (h || '').toLowerCase());
@@ -214,7 +215,7 @@ function profileColumns(grid: string[][], headRow: number): ColInfo[] {
 
 // ---------- จำการจับคู่คอลัมน์ต่อช่องทาง (ไฟล์รอบหน้าของแหล่งเดิมจับคู่ให้เอง) ----------
 // เก็บเป็น "ชื่อหัวคอลัมน์" ไม่ใช่ตำแหน่ง — สลับลำดับคอลัมน์แล้วยังจำได้
-interface SavedMap { text: string[]; score: string[]; date: string; topic: string; src: string; jr: string }
+interface SavedMap { text: string[]; score: string[]; date: string; topic: string; src: string; jr: string; proj?: string }
 const MAP_KEY = 'voc-colmap-';
 function loadSavedMap(chId: string): SavedMap | null {
   try { const s = localStorage.getItem(MAP_KEY + chId); return s ? JSON.parse(s) as SavedMap : null; } catch { return null; }
@@ -240,8 +241,8 @@ function cellScore(v: string, info: ColInfo): number | null {
   return null;
 }
 
-interface ColMap { date: number; topic: number; src: number; jr: number }
-interface Parsed { occurred: string; topic: string; text: string; source: string; journey: string; score: number | null; err: string }
+interface ColMap { date: number; topic: number; src: number; jr: number; proj: number }
+interface Parsed { occurred: string; topic: string; text: string; source: string; journey: string; project: string; score: number | null; err: string }
 
 const inp: React.CSSProperties = { padding: '9px 11px', border: '1px solid #dfe6f0', borderRadius: 8, fontSize: 13.5, fontFamily: 'inherit', background: '#fff' };
 const cellInp: React.CSSProperties = { padding: '5px 7px', border: '1px solid var(--line)', borderRadius: 6, fontSize: 12.5, fontFamily: 'inherit', background: 'var(--card,#fff)', color: 'inherit' };
@@ -265,7 +266,15 @@ export default function ImportPage() {
   const [textCols, setTextCols] = useState<number[]>([]);   // คอลัมน์ข้อความ (เลือกได้หลายช่อง → แยกเป็นหลายเสียง)
   const [scoreCols, setScoreCols] = useState<number[]>([]); // คอลัมน์คะแนนความพึงพอใจ
   const [useScore, setUseScore] = useState(true);
-  const [cmap, setCmap] = useState<ColMap>({ date: -1, topic: -1, src: -1, jr: -1 });
+  const [cmap, setCmap] = useState<ColMap>({ date: -1, topic: -1, src: -1, jr: -1, proj: -1 });
+  // ตรวจคุณภาพก่อนบันทึก: จับคู่โครงการ + หาแถวที่ซ้ำกับข้อมูลเดิม
+  const [checking, setChecking] = useState(false);
+  const [projHit, setProjHit] = useState<Map<string, string>>(new Map());   // ชื่อในไฟล์ → project.id
+  const [projMiss, setProjMiss] = useState<string[]>([]);                    // ชื่อที่ยังไม่มีในระบบ
+  const [createProj, setCreateProj] = useState(true);
+  const [dupTexts, setDupTexts] = useState<Set<string>>(new Set());
+  const [skipDup, setSkipDup] = useState(true);
+  const [undoing, setUndoing] = useState('');
   const [dFrom, setDFrom] = useState('');
   const [dTo, setDTo] = useState('');
   const [fyLabel, setFyLabel] = useState('');
@@ -274,6 +283,29 @@ export default function ImportPage() {
   const [dragOver, setDragOver] = useState(false);
   const [history, setHistory] = useState<UploadLog[]>([]);
   const fnBase = (process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://<โปรเจกต์>.supabase.co') + '/functions/v1/ingest-voc';
+
+  // ย้อนการนำเข้า — ลบเฉพาะเสียงที่มาจากรอบอัปโหลดนั้น (ใช้ batch_id)
+  async function undoImport(h: UploadLog) {
+    if (!supabase) return;
+    const label = (h.file_name || 'การนำเข้าครั้งนี้') + ' (' + h.ok_count + ' รายการ)';
+    if (!window.confirm('ลบข้อมูลจาก ' + label + ' ออกจากระบบ?\nการลบนี้ย้อนกลับไม่ได้')) return;
+    setUndoing(h.id); setErr(''); setMsg('');
+    try {
+      const { error, count } = await supabase.from('voc_record')
+        .delete({ count: 'exact' }).eq('batch_id', h.id);
+      if (error) {
+        throw new Error(/batch_id|column/i.test(error.message)
+          ? 'ยังไม่ได้รันไฟล์ supabase_import_quality.sql — ระบบจึงยังไม่รู้ว่าเสียงไหนมาจากรอบไหน'
+          : error.message);
+      }
+      await supabase.from('upload_log').delete().eq('id', h.id);
+      setMsg('ย้อนการนำเข้าสำเร็จ — ลบออก ' + (count ?? 0) + ' รายการ');
+      loadHistory();
+    } catch (e: unknown) {
+      setErr('ย้อนการนำเข้าไม่สำเร็จ: ' + (e instanceof Error ? e.message : String(e)));
+    }
+    setUndoing('');
+  }
 
   async function loadHistory() {
     if (!supabase) return;
@@ -390,6 +422,7 @@ export default function ImportPage() {
       topic: findCol(head, HKEY.topic, used),
       src: findCol(head, HKEY.src, used),
       jr: findCol(head, HKEY.jr, used),
+      proj: findCol(head, HKEY.proj, used),
     });
 
     // ถ้าเคยจับคู่ช่องทางนี้ไว้แล้วและชื่อคอลัมน์ตรงกัน → ใช้ของเดิมทับผลตรวจจับ
@@ -403,7 +436,7 @@ export default function ImportPage() {
         setScoreCols(saved.score.map(n => idxOfName(info, n)).filter(x => x >= 0));
         setCmap({
           date: idxOfName(info, saved.date), topic: idxOfName(info, saved.topic),
-          src: idxOfName(info, saved.src), jr: idxOfName(info, saved.jr),
+          src: idxOfName(info, saved.src), jr: idxOfName(info, saved.jr), proj: idxOfName(info, saved.proj || ''),
         });
       }
     }
@@ -431,6 +464,7 @@ export default function ImportPage() {
     const out: Parsed[] = [];
     body.forEach((r, i) => {
       const jr = cell(r, cmap.jr);
+      const projName = cell(r, cmap.proj);
       const occurred = cmap.date >= 0 ? normDate(cell(r, cmap.date)) : (autoDates[i] || dFrom);
       // คะแนนความพึงพอใจของผู้ตอบคนนี้ = ค่าเฉลี่ยของทุกคอลัมน์คะแนนที่กรอกไว้
       let score: number | null = null;
@@ -451,7 +485,8 @@ export default function ImportPage() {
           topic: baseTopic || colName.slice(0, 120),
           text,
           source: cell(r, cmap.src),
-          journey: JOURNEYS.includes(jr) ? jr : '',
+          journey: (JOURNEYS as readonly string[]).includes(jr) ? jr : '',
+          project: projName,
           score,
           err: '',
         };
@@ -466,7 +501,7 @@ export default function ImportPage() {
   function validateRow(p: Parsed): string {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(p.occurred)) return 'วันที่ต้องเป็น YYYY-MM-DD';
     if (!p.text.trim()) return 'ไม่มีข้อความเสียงลูกค้า';
-    if (p.journey && !JOURNEYS.includes(p.journey)) return 'Journey ไม่ตรง (ปล่อยว่างได้)';
+    if (p.journey && !(JOURNEYS as readonly string[]).includes(p.journey)) return 'เส้นทางลูกค้าไม่ตรงรายการ (ปล่อยว่างได้)';
     return '';
   }
   // แก้ไขค่าในแถว → ตรวจสอบใหม่ทันที
@@ -482,6 +517,51 @@ export default function ImportPage() {
 
   const ok = rows.filter(r => !r.err);
   const bad = rows.filter(r => r.err);
+  const dupCount = ok.filter(r => dupTexts.has(r.text)).length;
+  // แถวที่จะบันทึกจริง (ตัดแถวซ้ำออกถ้าเลือกข้าม)
+  const okSave = skipDup ? ok.filter(r => !dupTexts.has(r.text)) : ok;
+
+  // ---------- ตรวจคุณภาพก่อนบันทึก (ทำตอนเข้าขั้นที่ 4) ----------
+  // 1) จับคู่ชื่อโครงการในไฟล์กับตาราง project  2) หาข้อความที่มีอยู่แล้วในช่องทางนี้
+  useEffect(() => {
+    if (step !== 4 || !rows.length || !supabase) return;
+    let cancelled = false;
+    (async () => {
+      setChecking(true);
+      try {
+        // --- จับคู่โครงการ ---
+        const names = Array.from(new Set(ok.map(r => r.project.trim()).filter(Boolean)));
+        if (names.length) {
+          const { data: projs } = await supabase!.from('project').select('id, name');
+          const list = (projs ?? []) as { id: string; name: string }[];
+          const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, '');
+          const hit = new Map<string, string>();
+          const miss: string[] = [];
+          names.forEach(n => {
+            const k = norm(n);
+            const exact = list.find(p => norm(p.name) === k);
+            const partial = exact || list.find(p => norm(p.name).includes(k) || k.includes(norm(p.name)));
+            if (partial) hit.set(n, partial.id); else miss.push(n);
+          });
+          if (!cancelled) { setProjHit(hit); setProjMiss(miss); }
+        } else if (!cancelled) { setProjHit(new Map()); setProjMiss([]); }
+
+        // --- หาข้อความซ้ำกับของเดิม (ชุดละ 200 กัน payload ใหญ่เกิน) ---
+        const texts = Array.from(new Set(ok.map(r => r.text)));
+        const found = new Set<string>();
+        for (let i = 0; i < texts.length; i += 200) {
+          const { data, error } = await supabase!.rpc('existing_texts', { ch: chId, texts: texts.slice(i, i + 200) });
+          if (error) break;   // ยังไม่ได้รัน supabase_import_quality.sql → ข้ามการตรวจซ้ำ
+          (data ?? []).forEach((x: { raw_text: string }) => found.add(x.raw_text));
+        }
+        if (!cancelled) setDupTexts(found);
+      } finally {
+        if (!cancelled) setChecking(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, rows, chId]);
 
   // ตัวเลือกคอลัมน์ใน dropdown จับคู่ (ใช้ชื่อจากแถวหัวตาราง ถ้าว่างใช้ "คอลัมน์ N")
   const colOptions = (() => {
@@ -494,31 +574,55 @@ export default function ImportPage() {
   })();
 
   async function save() {
-    if (!supabase || !ok.length) return;
+    if (!supabase || !okSave.length) return;
     setBusy(true); setErr(''); setMsg('');
     try {
       const { data: u } = await supabase.auth.getUser();
       const stamp = Date.now();
+
+      // --- สร้างโครงการที่ยังไม่มีในระบบ (ถ้าเลือกไว้) แล้วรวมกับที่จับคู่ได้ ---
+      const projId = new Map(projHit);
+      if (createProj && projMiss.length) {
+        setProg('สร้างโครงการใหม่ ' + projMiss.length + ' รายการ…');
+        const { data: made } = await supabase.from('project')
+          .insert(projMiss.map(name => ({ name, project_type: projectTypeOf(name) })))
+          .select('id, name');
+        (made ?? []).forEach((p: { id: string; name: string }) => projId.set(p.name, p.id));
+      }
+
+      // --- เปิดรอบการนำเข้า (batch) ก่อน เพื่อให้ย้อนการนำเข้าครั้งนี้ได้ ---
+      let batchId: string | null = null;
+      try {
+        const { data: lg } = await supabase.from('upload_log').insert({
+          uploaded_by: u.user?.id ?? null, channel_id: chId, source, file_name: fileName || null,
+          total: rows.length, ok_count: okSave.length, method: 'file',
+        }).select('id').single();
+        batchId = lg?.id ?? null;
+      } catch { /* ตาราง upload_log อาจยังไม่ถูกสร้าง — ข้าม */ }
+
       // วิเคราะห์อัตโนมัติทุกแถวก่อนบันทึก — LLM (ถ้าเลือก) หรือ rule/keyword; เจ้าหน้าที่แก้ไขภายหลังได้
       let ai: SmartResult[];
       let llmCount = 0;
       let model = '';
       if (useLLM) {
-        const texts = ok.map(r => (r.topic ? r.topic + ' ' : '') + r.text);
+        const texts = okSave.map(r => (r.topic ? r.topic + ' ' : '') + r.text);
         ai = await analyzeSmartBatch(texts, chId, (done, total) =>
           setProg('วิเคราะห์ด้วย AI แล้ว ' + done + '/' + total + ' แถว…'));
         ai.forEach(b => { if (b.via === 'llm') { llmCount++; if (!model && b.model) model = b.model; } });
         setProg('');
       } else {
-        ai = ok.map(r => ({ ...analyzeText((r.topic ? r.topic + ' ' : '') + r.text, chId), via: 'rule' as const }));
+        ai = okSave.map(r => ({ ...analyzeText((r.topic ? r.topic + ' ' : '') + r.text, chId), via: 'rule' as const }));
       }
       // เสริมด้วยคะแนนความพึงพอใจจากแบบประเมิน (ถ้ามี) — ช่วยตัดสินเมื่อข้อความสั้น/กำกวม
-      ai = ai.map((a, i) => applyScoreHint(a, ok[i].score, ok[i].text));
-      const scored = ok.filter(r => r.score !== null).length;
-      const payload = ok.map((r, i) => ({
+      ai = ai.map((a, i) => applyScoreHint(a, okSave[i].score, okSave[i].text));
+      const scored = okSave.filter(r => r.score !== null).length;
+      const linked = okSave.filter(r => projId.has(r.project.trim())).length;
+      const payload = okSave.map((r, i) => ({
         ref_code: 'VOC-' + stamp + '-' + (i + 1),
         channel_id: chId,
         source: r.source || source,
+        project_id: projId.get(r.project.trim()) ?? null,   // ผูกกับโครงการจริงในระบบ
+        batch_id: batchId,                                   // ใช้ย้อนการนำเข้าครั้งนี้
         journey_stage: r.journey || ai[i].journey,
         raw_text: r.text,
         topic: r.topic || null,
@@ -529,8 +633,13 @@ export default function ImportPage() {
       }));
       // แบ่งชุดละ 100 แถว + บันทึกผลวิเคราะห์ AI ลงตาราง analysis คู่กัน
       for (let i = 0; i < payload.length; i += 100) {
-        const { data: ins, error } = await supabase.from('voc_record')
-          .insert(payload.slice(i, i + 100)).select('id, ref_code');
+        const chunk = payload.slice(i, i + 100);
+        let { data: ins, error } = await supabase.from('voc_record').insert(chunk).select('id, ref_code');
+        // ยังไม่ได้รัน supabase_import_quality.sql → ไม่มีคอลัมน์ batch_id
+        if (error && /batch_id|column/i.test(error.message || '')) {
+          const legacy = chunk.map(({ batch_id, ...rest }) => rest);
+          ({ data: ins, error } = await supabase.from('voc_record').insert(legacy).select('id, ref_code'));
+        }
         if (error) throw error;
         const byRef = new Map((ins ?? []).map((x: any) => [x.ref_code, x.id]));
         const arows = payload.slice(i, i + 100).map((p, j) => ({
@@ -563,22 +672,17 @@ export default function ImportPage() {
         text: textCols.map(i => nameOf(cols, i)).filter(Boolean),
         score: scoreCols.map(i => nameOf(cols, i)).filter(Boolean),
         date: nameOf(cols, cmap.date), topic: nameOf(cols, cmap.topic),
-        src: nameOf(cols, cmap.src), jr: nameOf(cols, cmap.jr),
+        src: nameOf(cols, cmap.src), jr: nameOf(cols, cmap.jr), proj: nameOf(cols, cmap.proj),
       });
 
-      // บันทึกประวัติการอัปโหลด (ไม่ให้ error ตรงนี้ทำให้การนำเข้าล้ม)
-      try {
-        await supabase.from('upload_log').insert({
-          uploaded_by: u.user?.id ?? null, channel_id: chId, source, file_name: fileName || null,
-          total: rows.length, ok_count: ok.length, method: 'file',
-        });
-        loadHistory();
-      } catch { /* ตาราง upload_log อาจยังไม่ถูกสร้าง — ข้าม */ }
-      setMsg('นำเข้าสำเร็จ ' + ok.length + ' รายการ เข้าช่องทาง "' + ch.name + '"' +
+      loadHistory();
+      setMsg('นำเข้าสำเร็จ ' + okSave.length + ' รายการ เข้าช่องทาง "' + ch.name + '"' +
+        (dupCount && skipDup ? ' · ข้ามแถวซ้ำ ' + dupCount + ' แถว' : '') +
+        (linked ? ' · ผูกโครงการได้ ' + linked + ' แถว' : '') +
         (useLLM
-          ? (llmCount === ok.length
+          ? (llmCount === okSave.length
               ? ' · วิเคราะห์ด้วย LLM ทั้งหมด' + (model ? ' (' + model + ')' : '')
-              : ' · LLM ' + llmCount + ' แถว, rule-based ' + (ok.length - llmCount) + ' แถว (LLM ใช้ไม่ได้บางส่วน)')
+              : ' · LLM ' + llmCount + ' แถว, rule-based ' + (okSave.length - llmCount) + ' แถว (LLM ใช้ไม่ได้บางส่วน)')
           : ' · วิเคราะห์แบบ rule-based') +
         (scored ? ' · ใช้คะแนนแบบประเมินช่วยตัดสิน ' + scored + ' รายการ' : '') +
         ' — ดูได้ในเมนูรายการ VOC');
@@ -750,7 +854,8 @@ export default function ImportPage() {
                 ['date', 'วันที่เกิดเรื่อง'],
                 ['topic', 'หัวข้อ/ประเด็น'],
                 ['src', 'แหล่งที่มา'],
-                ['jr', 'Journey'],
+                ['proj', 'โครงการ'],
+                ['jr', 'เส้นทางลูกค้า (Journey)'],
               ] as const).map(([k, label]) => (
                 <label key={k} className="imp-field">
                   <span>{label}</span>
@@ -822,16 +927,60 @@ export default function ImportPage() {
             <div className="imp-sub">แก้ไขในช่องได้เลย ระบบตรวจใหม่ทันที · แถวที่มีปัญหาจะไม่ถูกบันทึก</div>
 
             <div className="imp-stats">
-              <div className="imp-chip"><div className="n" style={{ color: 'var(--iok)' }}>{ok.length.toLocaleString()}</div><div className="l">พร้อมบันทึก</div></div>
+              <div className="imp-chip"><div className="n" style={{ color: 'var(--iok)' }}>{okSave.length.toLocaleString()}</div><div className="l">จะบันทึกจริง</div></div>
               <div className="imp-chip"><div className="n" style={{ color: bad.length ? 'var(--ibad)' : undefined }}>{bad.length.toLocaleString()}</div><div className="l">ต้องแก้ไข</div></div>
+              <div className="imp-chip"><div className="n" style={{ color: dupCount ? '#92400e' : undefined }}>{dupCount.toLocaleString()}</div><div className="l">ซ้ำกับของเดิม</div></div>
               <div className="imp-chip"><div className="n">{ch.name.slice(0, 14)}</div><div className="l">ช่องทางปลายทาง</div></div>
             </div>
+
+            {checking && <div className="imp-alert info">⏳ กำลังตรวจข้อมูลซ้ำและจับคู่โครงการ…</div>}
+
+            {/* ข้อมูลซ้ำกับที่นำเข้าไปแล้ว */}
+            {!checking && dupCount > 0 && (
+              <div className="imp-alert warn">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={skipDup} style={{ width: 'auto' }} onChange={e => setSkipDup(e.target.checked)} />
+                  ข้ามแถวที่ซ้ำกับข้อมูลเดิม {dupCount.toLocaleString()} แถว
+                </label>
+                <div style={{ marginTop: 6, opacity: .9 }}>
+                  พบข้อความเดียวกันอยู่แล้วในช่องทาง &ldquo;{ch.name}&rdquo; — มักเกิดจากอัปโหลดไฟล์เดิมซ้ำ
+                  ถ้าเอาติ๊กออกจะบันทึกทับเข้าไปอีกชุด (สถิติจะนับซ้ำ)
+                </div>
+              </div>
+            )}
+
+            {/* การจับคู่โครงการ */}
+            {!checking && cmap.proj >= 0 && (projHit.size > 0 || projMiss.length > 0) && (
+              <div className="imp-alert info">
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>🏠 การผูกกับโครงการ</div>
+                จับคู่กับโครงการในระบบได้ <b style={{ color: 'var(--iok)' }}>{projHit.size}</b> ชื่อ
+                {projMiss.length > 0 && <> · ยังไม่มีในระบบ <b>{projMiss.length}</b> ชื่อ</>}
+                {projMiss.length > 0 && (
+                  <>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={createProj} style={{ width: 'auto' }} onChange={e => setCreateProj(e.target.checked)} />
+                      สร้างโครงการที่ยังไม่มีให้อัตโนมัติ
+                    </label>
+                    <div className="imp-note" style={{ marginTop: 5 }}>
+                      {projMiss.slice(0, 6).join(' · ')}{projMiss.length > 6 ? ' …และอีก ' + (projMiss.length - 6) : ''}
+                    </div>
+                  </>
+                )}
+                {cmap.proj < 0 && <div className="imp-note">ยังไม่ได้เลือกคอลัมน์โครงการในขั้นก่อนหน้า</div>}
+              </div>
+            )}
+            {!checking && cmap.proj < 0 && (
+              <div className="imp-alert warn">
+                ⚠ ยังไม่ได้จับคู่คอลัมน์ <b>โครงการ</b> — ข้อมูลชุดนี้จะไม่ปรากฏในหน้าภาพรวม &ldquo;Top โครงการ&rdquo;
+                ตัวกรองโครงการ และรายงานแยกตามโครงการ · ย้อนกลับไปเลือกได้ในขั้นที่ 3
+              </div>
+            )}
 
             <div className="imp-box" style={{ maxHeight: 430 }}>
               <table style={{ fontSize: 12.5 }}>
                 <thead><tr><th style={{ width: 34 }}>#</th><th>วันที่</th><th>หัวข้อ</th><th>ข้อความเสียงลูกค้า</th><th>แหล่ง</th><th>ผลตรวจ</th><th /></tr></thead>
                 <tbody>{rows.map((r, i) => (
-                  <tr key={i} style={r.err ? { background: 'rgba(220,38,38,.07)' } : undefined}>
+                  <tr key={i} style={r.err ? { background: 'rgba(220,38,38,.07)' } : dupTexts.has(r.text) ? { background: 'rgba(245,158,11,.1)' } : undefined}>
                     <td>{i + 1}</td>
                     <td><input value={r.occurred} onChange={e => editRow(i, 'occurred', e.target.value)} style={{ ...cellInp, width: 104 }} placeholder="YYYY-MM-DD" /></td>
                     <td><input value={r.topic} onChange={e => editRow(i, 'topic', e.target.value)} style={{ ...cellInp, width: 128 }} /></td>
@@ -839,6 +988,8 @@ export default function ImportPage() {
                     <td><input value={r.source} onChange={e => editRow(i, 'source', e.target.value)} style={{ ...cellInp, width: 96 }} placeholder={source} /></td>
                     <td style={{ whiteSpace: 'nowrap', fontSize: 11.5 }}>{r.err
                       ? <span style={{ color: 'var(--ibad)' }}>✗ {r.err}</span>
+                      : dupTexts.has(r.text)
+                      ? <span style={{ color: '#92400e' }}>🔁 ซ้ำ</span>
                       : <span style={{ color: 'var(--iok)' }}>✓ พร้อม</span>}</td>
                     <td><button type="button" onClick={() => delRow(i)} title="ลบแถวนี้"
                       style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14 }}>🗑️</button></td>
@@ -850,7 +1001,7 @@ export default function ImportPage() {
             <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13, marginTop: 16, cursor: 'pointer' }}>
               <input type="checkbox" checked={useLLM} style={{ width: 'auto' }} onChange={e => setUseLLM(e.target.checked)} />
               <span><b>🧠 วิเคราะห์ด้วย LLM จริง</b> <span className="imp-note">— แม่นกว่า ส่งครั้งละ 10 แถว
-                {useLLM && ok.length ? ' (~' + Math.ceil(ok.length / 10) + ' คำขอ)' : ''} · ถ้าใช้ไม่ได้จะสลับเป็น rule-based อัตโนมัติ</span></span>
+                {useLLM && okSave.length ? ' (~' + Math.ceil(okSave.length / 10) + ' คำขอ)' : ''} · ถ้าใช้ไม่ได้จะสลับเป็น rule-based อัตโนมัติ</span></span>
             </label>
 
             {role === 'mock' && <div className="imp-alert info">โหมดข้อมูลจำลอง — ปุ่มบันทึกใช้ได้เมื่อเชื่อม Supabase แล้ว</div>}
@@ -859,8 +1010,8 @@ export default function ImportPage() {
 
             <div className="imp-foot">
               <button type="button" className="imp-btn" onClick={() => setStep(3)}>← ย้อนกลับ</button>
-              <button type="button" className="imp-btn pri" onClick={save} disabled={busy || !ok.length || role === 'mock' || role === 'none'}>
-                {busy ? (prog || 'กำลังนำเข้า…') : '💾 บันทึก ' + ok.length.toLocaleString() + ' รายการ'}
+              <button type="button" className="imp-btn pri" onClick={save} disabled={busy || checking || !okSave.length || role === 'mock' || role === 'none'}>
+                {busy ? (prog || 'กำลังนำเข้า…') : '💾 บันทึก ' + okSave.length.toLocaleString() + ' รายการ'}
               </button>
             </div>
           </div>
@@ -879,7 +1030,7 @@ export default function ImportPage() {
             ) : (
               <div className="imp-box">
                 <table>
-                  <thead><tr><th>วันเวลา</th><th>ช่องทาง</th><th>ไฟล์</th><th>ทั้งหมด</th><th>สำเร็จ</th><th>โดย</th></tr></thead>
+                  <thead><tr><th>วันเวลา</th><th>ช่องทาง</th><th>ไฟล์</th><th>ทั้งหมด</th><th>สำเร็จ</th><th>โดย</th><th /></tr></thead>
                   <tbody>{history.map(h => {
                     const prof = Array.isArray(h.profiles) ? h.profiles[0] : h.profiles;
                     return (
@@ -890,6 +1041,12 @@ export default function ImportPage() {
                         <td>{h.total}</td>
                         <td style={{ color: 'var(--iok)', fontWeight: 600 }}>{h.ok_count}</td>
                         <td>{prof?.full_name || '-'}</td>
+                        <td>
+                          <button type="button" className="imp-btn" style={{ padding: '4px 10px', fontSize: 12 }}
+                            disabled={undoing === h.id} onClick={() => undoImport(h)}>
+                            {undoing === h.id ? 'กำลังลบ…' : '↩ ย้อนการนำเข้า'}
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}</tbody>
