@@ -35,6 +35,48 @@ input[type=file]{width:auto;padding:0;border:none}
 .tag{background:#eef2ff;color:var(--navy);border-radius:6px;padding:2px 8px;font-size:11px}
 .pipe{display:flex;height:16px;border-radius:8px;overflow:hidden;border:1px solid var(--line);margin-bottom:10px}
 .btn{display:inline-block;background:var(--blue);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-family:inherit;font-size:13px;cursor:pointer}
+/* ============================================================
+   หน้าภาพรวม — การ์ด KPI แบบมีแถบสีและตัวเลขเทียบช่วงก่อน
+   ============================================================ */
+.kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px;margin-bottom:16px}
+.kcard{position:relative;background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 17px 13px;overflow:hidden;transition:transform .16s ease,box-shadow .16s ease}
+.kcard:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(31,58,147,.12)}
+.kcard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--kc,#2e6cf0)}
+.kcard .klab{font-size:12px;color:var(--muted);font-weight:500}
+.kcard .kval{font-size:30px;font-weight:700;line-height:1.15;margin:2px 0 3px;color:var(--kc,#1f3a93)}
+.kcard .kdelta{font-size:11.5px;font-weight:600;display:flex;align-items:center;gap:4px}
+.kcard .kdelta.up{color:#16a34a}.kcard .kdelta.down{color:#dc2626}.kcard .kdelta.flat{color:var(--muted)}
+.kcard .kspark{margin-top:7px}
+
+/* การ์ดสรุปสะสมทั้งองค์กร */
+.sumcard{background:linear-gradient(135deg,#1f3a93 0%,#2547a8 45%,#16285f 100%);color:#fff;border:none;border-radius:16px;padding:20px 22px;margin-bottom:16px;position:relative;overflow:hidden}
+.sumcard::after{content:'';position:absolute;right:-70px;top:-90px;width:270px;height:270px;border-radius:50%;background:rgba(255,255,255,.06)}
+.sumcard::before{content:'';position:absolute;right:60px;bottom:-120px;width:200px;height:200px;border-radius:50%;background:rgba(255,255,255,.04)}
+.sum-head{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;margin-bottom:16px;position:relative;z-index:1}
+.sum-head span{font-weight:400;opacity:.7;font-size:12px}
+.sum-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;position:relative;z-index:1}
+.sum-item{padding-left:14px;border-left:2px solid rgba(255,255,255,.2)}
+.sum-item .l{font-size:11.5px;opacity:.8;margin-bottom:3px}
+.sum-item .v{font-size:29px;font-weight:700;line-height:1.1}
+.sum-item .s{font-size:11px;opacity:.65;margin-top:2px}
+
+/* เสียงลูกค้าตาม Customer Journey */
+.jr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.jr-card{background:var(--card,#fff);border:1px solid var(--line);border-radius:12px;padding:13px 14px;text-align:center;transition:transform .16s ease,border-color .16s ease}
+.jr-card:hover{transform:translateY(-3px);border-color:var(--jc)}
+.jr-card .en{font-size:11.5px;color:var(--muted)}
+.jr-card .n{font-size:26px;font-weight:700;line-height:1.2;margin:3px 0;color:var(--jc)}
+.jr-card .th{font-size:12.5px;font-weight:600;margin-bottom:9px}
+.jr-card .bar{height:6px;background:#eef2f7;border-radius:6px;overflow:hidden}
+.jr-card .bar i{display:block;height:100%;background:var(--jc);border-radius:6px}
+.jr-flow{font-size:12px;color:var(--muted);margin:-4px 0 12px;line-height:1.8}
+
+@media(max-width:560px){
+  .kcard .kval{font-size:25px}
+  .sum-item .v{font-size:24px}
+  .jr-card .n{font-size:22px}
+}
+
 /* การ์ดช่องทาง — เอฟเฟกต์ hover เคลื่อนไหว */
 .chan-card{transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;cursor:pointer}
 .chan-card:hover{transform:translateY(-5px);box-shadow:0 12px 26px rgba(31,58,147,.18);border-color:var(--blue)}
