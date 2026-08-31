@@ -53,58 +53,120 @@ function Delta({ now, prev, label, invert = false }: { now: number; prev: number
 
 const SENT_COLOR = { pos: '#16a34a', neu: '#f59e0b', neg: '#dc2626' };   // เขียว/เหลือง/แดง — ชุดเดียวกับหน้า 8 ช่องทาง
 
-/** กราฟผสม: แท่ง = จำนวนเสียง · เส้น = %เชิงบวก และ %เชิงลบ (แกน % อยู่ขวา) */
+/** สเกลแกนที่ลงตัวสวย — คืนค่าสูงสุดและระยะขีด */
+function niceScale(max: number): { max: number; step: number } {
+  if (max <= 4) return { max: 4, step: 1 };
+  const raw = max / 4;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const n = raw / mag;
+  const step = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
+  return { max: Math.ceil(max / step) * step, step };
+}
+
+/** เส้นโค้งนุ่มผ่านจุดที่กำหนด (Catmull-Rom → Bezier) */
+function smoothPath(pts: [number, number][]): string {
+  if (pts.length === 0) return '';
+  if (pts.length === 1) return `M${pts[0][0]},${pts[0][1]}`;
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+
+/**
+ * กราฟผสม: แท่ง = จำนวนเสียง · เส้นโค้ง = %เชิงบวก / %เชิงลบ (แกน % อยู่ขวา)
+ * เดือนที่ยังไม่มีข้อมูลจะไม่ลากเส้น % ลงศูนย์ แต่ตัดช่วงเส้นแทน — กราฟจึงไม่หักแหลมผิดความหมาย
+ */
 function TrendCombo({ data }: { data: { label: string; n: number; pos: number; neg: number }[] }) {
-  const W = 760, H = 260, L = 46, R = 40, T = 14, B = 34;
+  const W = 780, H = 280, L = 52, R = 44, T = 22, B = 40;
   const iw = W - L - R, ih = H - T - B;
-  const maxN = Math.max(...data.map(d => d.n), 1);
-  const niceMax = Math.ceil(maxN / 5) * 5 || 5;
+  const sc = niceScale(Math.max(...data.map(d => d.n), 1));
   const x = (i: number) => L + (data.length > 1 ? (i / (data.length - 1)) * iw : iw / 2);
-  const yN = (v: number) => T + ih - (v / niceMax) * ih;
+  const yN = (v: number) => T + ih - (v / sc.max) * ih;
   const yP = (v: number) => T + ih - (v / 100) * ih;
-  const bw = Math.max(8, Math.min(38, iw / data.length * 0.55));
-  const line = (key: 'pos' | 'neg') => data.map((d, i) => `${x(i).toFixed(1)},${yP(d[key]).toFixed(1)}`).join(' ');
+  const bw = Math.max(10, Math.min(30, iw / data.length * 0.5));
+  const ticks = Array.from({ length: Math.round(sc.max / sc.step) + 1 }, (_, i) => i * sc.step);
+  const hasData = data.some(d => d.n > 0);
+
+  // แบ่งเส้น % เป็นช่วง ๆ เฉพาะเดือนที่มีข้อมูลติดกัน
+  const runs = (key: 'pos' | 'neg'): [number, number][][] => {
+    const out: [number, number][][] = [];
+    let cur: [number, number][] = [];
+    data.forEach((d, i) => {
+      if (d.n > 0) cur.push([x(i), yP(d[key])]);
+      else if (cur.length) { out.push(cur); cur = []; }
+    });
+    if (cur.length) out.push(cur);
+    return out;
+  };
 
   return (
     <div style={{ overflowX: 'auto' }}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: 'block', minWidth: 520 }} role="img"
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: 'block', minWidth: 560 }} role="img"
         aria-label="กราฟแนวโน้มจำนวนเสียงลูกค้าและสัดส่วน sentiment รายเดือน">
-        {/* เส้นกริดแนวนอน + แกนซ้าย (จำนวน) + แกนขวา (%) */}
-        {[0, 0.25, 0.5, 0.75, 1].map(p => {
-          const yy = T + ih - p * ih;
+        <defs>
+          <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#93b4f5" /><stop offset="100%" stopColor="#dbe6fb" />
+          </linearGradient>
+        </defs>
+
+        {/* เส้นกริด + ตัวเลขแกนซ้าย (จำนวน) และแกนขวา (%) */}
+        {ticks.map((v, i) => {
+          const yy = yN(v);
           return (
-            <g key={p}>
-              <line x1={L} y1={yy} x2={W - R} y2={yy} stroke="#e8edf5" strokeWidth={1} />
-              <text x={L - 7} y={yy + 3.5} textAnchor="end" fontSize={10} fill="#94a3b8">{Math.round(niceMax * p).toLocaleString()}</text>
-              <text x={W - R + 7} y={yy + 3.5} fontSize={10} fill="#94a3b8">{Math.round(100 * p)}</text>
+            <g key={v}>
+              <line x1={L} y1={yy} x2={W - R} y2={yy} stroke="#eef2f8" strokeWidth={1} />
+              <text x={L - 9} y={yy + 3.5} textAnchor="end" fontSize={10.5} fill="#94a3b8">{v.toLocaleString()}</text>
+              <text x={W - R + 9} y={yy + 3.5} fontSize={10.5} fill="#94a3b8">
+                {Math.round(100 / (ticks.length - 1) * i)}
+              </text>
             </g>
           );
         })}
+        <line x1={L} y1={T + ih} x2={W - R} y2={T + ih} stroke="#cbd5e1" strokeWidth={1} />
+
         {/* แท่งจำนวนเสียง */}
-        {data.map((d, i) => (
-          <rect key={d.label} x={x(i) - bw / 2} y={yN(d.n)} width={bw} height={Math.max(0, T + ih - yN(d.n))}
-            fill="#c7d7f7" rx={3}><title>{d.label}: {d.n.toLocaleString()} เสียง</title></rect>
-        ))}
-        {/* เส้น % เชิงบวก / เชิงลบ */}
-        <polyline points={line('pos')} fill="none" stroke={SENT_COLOR.pos} strokeWidth={2.5} strokeLinejoin="round" />
-        <polyline points={line('neg')} fill="none" stroke={SENT_COLOR.neg} strokeWidth={2.5} strokeLinejoin="round" />
-        {data.map((d, i) => (
-          <g key={'p' + d.label}>
-            <circle cx={x(i)} cy={yP(d.pos)} r={3.5} fill={SENT_COLOR.pos}><title>{d.label}: เชิงบวก {d.pos}%</title></circle>
-            <circle cx={x(i)} cy={yP(d.neg)} r={3.5} fill={SENT_COLOR.neg}><title>{d.label}: เชิงลบ {d.neg}%</title></circle>
+        {data.map((d, i) => d.n > 0 && (
+          <g key={d.label + i}>
+            <rect x={x(i) - bw / 2} y={yN(d.n)} width={bw} height={Math.max(2, T + ih - yN(d.n))}
+              fill="url(#barGrad)" rx={4}>
+              <title>{d.label}: {d.n.toLocaleString()} เสียง · บวก {d.pos}% · ลบ {d.neg}%</title>
+            </rect>
+            <text x={x(i)} y={yN(d.n) - 6} textAnchor="middle" fontSize={10} fontWeight={600} fill="#5578c4">{d.n.toLocaleString()}</text>
           </g>
         ))}
-        {/* ชื่อเดือน */}
-        {data.map((d, i) => (
-          <text key={'x' + d.label} x={x(i)} y={H - 12} textAnchor="middle" fontSize={10.5} fill="#64748b">{d.label}</text>
+
+        {/* เส้น % เชิงบวก / เชิงลบ — ตัดช่วงที่ไม่มีข้อมูล */}
+        {(['pos', 'neg'] as const).map(k => runs(k).map((seg, si) => (
+          <path key={k + si} d={smoothPath(seg)} fill="none"
+            stroke={k === 'pos' ? SENT_COLOR.pos : SENT_COLOR.neg}
+            strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
+        )))}
+        {data.map((d, i) => d.n > 0 && (
+          <g key={'pt' + i}>
+            <circle cx={x(i)} cy={yP(d.pos)} r={4} fill="#fff" stroke={SENT_COLOR.pos} strokeWidth={2.2}><title>{d.label}: เชิงบวก {d.pos}%</title></circle>
+            <circle cx={x(i)} cy={yP(d.neg)} r={4} fill="#fff" stroke={SENT_COLOR.neg} strokeWidth={2.2}><title>{d.label}: เชิงลบ {d.neg}%</title></circle>
+          </g>
         ))}
-        <text x={12} y={T + ih / 2} fontSize={10} fill="#94a3b8" transform={`rotate(-90 12 ${T + ih / 2})`} textAnchor="middle">จำนวน</text>
-        <text x={W - 8} y={T + ih / 2} fontSize={10} fill="#94a3b8" textAnchor="middle">%</text>
+
+        {/* ชื่อเดือน — เดือนที่ยังไม่มีข้อมูลจะจางลง */}
+        {data.map((d, i) => (
+          <text key={'x' + i} x={x(i)} y={H - 14} textAnchor="middle" fontSize={11}
+            fill={d.n > 0 ? '#475569' : '#cbd5e1'} fontWeight={d.n > 0 ? 500 : 400}>{d.label}</text>
+        ))}
+        <text x={14} y={T + ih / 2} fontSize={10.5} fill="#94a3b8" transform={`rotate(-90 14 ${T + ih / 2})`} textAnchor="middle">จำนวนเสียง</text>
+        <text x={W - 10} y={T + ih / 2} fontSize={10.5} fill="#94a3b8" transform={`rotate(90 ${W - 10} ${T + ih / 2})`} textAnchor="middle">เปอร์เซ็นต์</text>
+
+        {!hasData && <text x={W / 2} y={T + ih / 2} textAnchor="middle" fontSize={13} fill="#94a3b8">ยังไม่มีข้อมูลในช่วงนี้</text>}
       </svg>
-      <div style={{ display: 'flex', gap: 18, justifyContent: 'center', fontSize: 12, marginTop: 4, flexWrap: 'wrap' }}>
-        <span><span style={{ display: 'inline-block', width: 14, height: 9, background: '#c7d7f7', borderRadius: 2, marginRight: 6 }} />จำนวน VOC</span>
-        <span><span style={{ display: 'inline-block', width: 14, height: 3, background: SENT_COLOR.pos, marginRight: 6, verticalAlign: 'middle' }} />% เชิงบวก</span>
-        <span><span style={{ display: 'inline-block', width: 14, height: 3, background: SENT_COLOR.neg, marginRight: 6, verticalAlign: 'middle' }} />% เชิงลบ</span>
+      <div style={{ display: 'flex', gap: 20, justifyContent: 'center', fontSize: 12, marginTop: 6, flexWrap: 'wrap' }}>
+        <span><span style={{ display: 'inline-block', width: 15, height: 10, background: 'linear-gradient(#93b4f5,#dbe6fb)', borderRadius: 3, marginRight: 6, verticalAlign: 'middle' }} />จำนวน VOC</span>
+        <span><span style={{ display: 'inline-block', width: 16, height: 3, background: SENT_COLOR.pos, borderRadius: 2, marginRight: 6, verticalAlign: 'middle' }} />% เชิงบวก</span>
+        <span><span style={{ display: 'inline-block', width: 16, height: 3, background: SENT_COLOR.neg, borderRadius: 2, marginRight: 6, verticalAlign: 'middle' }} />% เชิงลบ</span>
       </div>
     </div>
   );
