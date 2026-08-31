@@ -38,7 +38,7 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
   const [journey, setJourney] = useState('all');
   const [q, setQ] = useState(initialQ);
   const [page, setPage] = useState(1);
-  const PER = 50;   // แถวต่อหน้า — ข้อมูลจริงหลักพันจะไม่ทำให้หน้าหน่วง
+  const PER = 20;   // แถวต่อหน้า — อ่านง่าย ไม่ต้องเลื่อนยาว และรองรับข้อมูลหลักพัน
   useEffect(() => { const c = currentFYQuarter(); setMaxFY(c.be); setBeYear(c.be); setQuarter(c.q); }, []);
   const YEARS = [maxFY, maxFY - 1, maxFY - 2];
 
@@ -56,26 +56,31 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
 
   const cloud = useMemo(() => computeCloud(rows), [rows]);
 
-  const fr = useMemo(() => rows.filter(r =>
+  // กรองทุกเงื่อนไข "ยกเว้นขั้นเส้นทางลูกค้า" — ใช้เป็นฐานนับจำนวนต่อขั้น
+  // จะได้เห็นจำนวนจริงของแต่ละขั้นตามตัวกรองปัจจุบัน และสลับขั้นไปมาได้โดยตัวเลขไม่หาย
+  const frBase = useMemo(() => rows.filter(r =>
     (allTime || (r.occurredAt >= range.from && r.occurredAt <= range.to)) &&
     (ptype === 'all' || r.projectType === ptype) &&
     (!projQ || (r.project || '').toLowerCase().includes(projQ)) &&
     (channel === 'all' || r.channel === channel) &&
-    (journey === 'all' || r.journey === journey) &&
     (!qq || (r.voice + r.topic + r.ref + r.owner + r.project).toLowerCase().includes(qq))
-  ), [rows, allTime, range.from, range.to, ptype, projQ, channel, journey, qq]);
+  ), [rows, allTime, range.from, range.to, ptype, projQ, channel, qq]);
+
+  const fr = useMemo(() =>
+    journey === 'all' ? frBase : frBase.filter(r => r.journey === journey),
+    [frBase, journey]);
 
   // เปลี่ยนตัวกรอง/คำค้น → กลับไปหน้าแรกเสมอ ไม่งั้นจะค้างอยู่หน้าที่ไม่มีข้อมูล
   useEffect(() => { setPage(1); }, [beYear, quarter, ptype, projQ, channel, journey, qq]);
   const pageCount = Math.max(1, Math.ceil(fr.length / PER));
   const pageRows = fr.slice((page - 1) * PER, page * PER);
 
-  // จำนวนต่อขั้น (นับจากชุดก่อนกรอง journey) — ใช้โชว์ในตัวเลือก
+  // จำนวนจริงต่อขั้น ตามตัวกรองที่เลือกอยู่ (ไม่นับตัวกรองขั้นเอง)
   const jrCount = useMemo(() => {
     const m: Record<string, number> = {};
-    rows.forEach(r => { if (r.journey) m[r.journey] = (m[r.journey] || 0) + 1; });
+    frBase.forEach(r => { if (r.journey) m[r.journey] = (m[r.journey] || 0) + 1; });
     return m;
-  }, [rows]);
+  }, [frBase]);
 
   // ประเด็นซ้ำ (recurring) — นับหัวข้อในชุดที่กรอง
   const topicCount = useMemo(() => {
@@ -121,7 +126,7 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
           <select style={sel} value={journey} onChange={e => setJourney(e.target.value)}>
             <option value="all">ทุกขั้นเส้นทางลูกค้า</option>
             {JOURNEYS.map(j => (
-              <option key={j} value={j}>{JOURNEY_TH[j]} ({j}){jrCount[j] ? ' · ' + jrCount[j] : ''}</option>
+              <option key={j} value={j}>{JOURNEY_TH[j]} ({j})</option>
             ))}
           </select>
         </div>
@@ -149,16 +154,19 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
             {JOURNEYS.map(j => {
               const c = JOURNEY_COLOR[j];
               const on = journey === j;
+              const n = jrCount[j] || 0;
               return (
-                <button key={j} type="button" title={journeyLabel(j)}
+                <button key={j} type="button" title={journeyLabel(j) + ' — ' + n.toLocaleString() + ' รายการ'}
+                  disabled={n === 0 && !on}
                   onClick={() => setJourney(on ? 'all' : j)}
                   style={{
                     border: '1px solid ' + (on ? c.fg : 'var(--line)'), background: on ? c.bg : 'transparent',
                     color: on ? c.fg : 'inherit', borderRadius: 20, padding: '4px 12px', fontSize: 12,
-                    fontFamily: 'inherit', cursor: 'pointer', fontWeight: on ? 700 : 500,
+                    fontFamily: 'inherit', cursor: n === 0 && !on ? 'default' : 'pointer',
+                    fontWeight: on ? 700 : 500, opacity: n === 0 && !on ? .4 : 1,
                   }}>
                   <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: c.fg, marginRight: 6 }} />
-                  {JOURNEY_TH[j]} <b>{jrCount[j] || 0}</b>
+                  {JOURNEY_TH[j]} <b>{n.toLocaleString()}</b>
                 </button>
               );
             })}
