@@ -385,10 +385,16 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
   const posTopic: Record<string, { c: number; pos: number }> = {};
   f.forEach(r => { posTopic[r.topic] ||= { c: 0, pos: 0 }; posTopic[r.topic].c++; if (r.sentiment === 'Positive') posTopic[r.topic].pos++; });
   const strong = Object.entries(posTopic).filter(([, o]) => o.pos > 0).sort((a, b) => b[1].pos - a[1].pos).slice(0, 5);
-  const projAgg: Record<string, number> = {};
-  f.forEach(r => { if (r.project) projAgg[r.project] = (projAgg[r.project] || 0) + 1; });
-  const topProjects = Object.entries(projAgg).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const maxProj = topProjects.length ? topProjects[0][1] : 1;
+  // Top 5 โครงการ แยกเป็นเสียงเชิงบวกสูงสุด / เชิงลบสูงสุด
+  const projAgg: Record<string, { pos: number; neg: number }> = {};
+  f.forEach(r => {
+    if (!r.project) return;
+    projAgg[r.project] ||= { pos: 0, neg: 0 };
+    if (r.sentiment === 'Positive') projAgg[r.project].pos++;
+    if (r.sentiment === 'Negative') projAgg[r.project].neg++;
+  });
+  const topPos = Object.entries(projAgg).filter(([, o]) => o.pos > 0).sort((a, b) => b[1].pos - a[1].pos).slice(0, 5);
+  const topNeg = Object.entries(projAgg).filter(([, o]) => o.neg > 0).sort((a, b) => b[1].neg - a[1].neg).slice(0, 5);
 
   const sp = tick ? (tick.sentiment === 'Positive' ? 'p-pos' : tick.sentiment === 'Negative' ? 'p-neg' : 'p-neu') : 'p-neu';
 
@@ -564,55 +570,93 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
         </div>
 
 
-        {/* ประเด็นจับตา + Top โครงการ */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16, marginBottom: 16 }}>
+        {/* ประเด็นจับตา + จุดแข็ง */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 16, marginBottom: 16 }}>
           <div className="card" style={{ marginBottom: 0 }}>
-            <h3>⚠️ ประเด็นที่ต้องจับตา</h3>
-            {watch.length === 0 && <div style={{ fontSize: 13, color: 'var(--muted)' }}>ไม่มีเสียงเชิงลบในช่วง/ตัวกรองนี้</div>}
-            {watch.map(([t, o]) => (
-              <div key={t} style={{ padding: '7px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Link href={'/voc?q=' + encodeURIComponent(t)} style={{ fontWeight: 600 }}>{t}</Link>
-                  <span style={{ color: 'var(--red)', fontWeight: 700 }}>{o.neg} ลบ</span>
+            <h3>🔥 ประเด็น/เรื่องที่ต้องจับตา</h3>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -6, marginBottom: 8 }}>
+              หัวข้อที่ถูกพูดถึงบ่อยและมีเสียงเชิงลบมาก — นำไปสู่การพัฒนาบริการ
+            </div>
+            {watch.length === 0
+              ? <div style={{ fontSize: 13, color: 'var(--muted)' }}>ไม่มีเสียงเชิงลบในช่วง/ตัวกรองนี้</div>
+              : watch.map(([t, o]) => (
+                <div key={t} className="wl-row">
+                  <div className="wl-name">
+                    <span style={{ color: 'var(--red)' }}>⚠</span>
+                    <Link href={'/voc?q=' + encodeURIComponent(t)} title={t}>{t}</Link>
+                  </div>
+                  <div className="wl-bar" style={{ background: '#fee2e2' }}>
+                    <i style={{ width: Math.round(o.neg / o.c * 100) + '%', background: '#dc2626' }} />
+                  </div>
+                  <div className="wl-meta" style={{ color: 'var(--red)' }}>
+                    พูดถึง {o.c} · ลบ {o.neg} ({Math.round(o.neg / o.c * 100)}%)
+                  </div>
                 </div>
-                <div style={{ height: 6, background: '#fee2e2', borderRadius: 6, marginTop: 4 }}>
-                  <div style={{ width: Math.round(o.neg / o.c * 100) + '%', height: '100%', background: '#dc2626', borderRadius: 6 }} />
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
+
           <div className="card" style={{ marginBottom: 0 }}>
             <h3>🌟 จุดแข็งที่ลูกค้าชื่นชม</h3>
-            {strong.length === 0 && <div style={{ fontSize: 13, color: 'var(--muted)' }}>ไม่มีเสียงเชิงบวกในช่วง/ตัวกรองนี้</div>}
-            {strong.map(([t, o]) => (
-              <div key={t} style={{ padding: '7px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <Link href={'/voc?q=' + encodeURIComponent(t)} style={{ fontWeight: 600 }}>{t}</Link>
-                  <span style={{ color: 'var(--green)', fontWeight: 700, whiteSpace: 'nowrap' }}>{o.pos} บวก</span>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -6, marginBottom: 8 }}>
+              หัวข้อที่ได้เสียงเชิงบวกมาก — ควรรักษาไว้และขยายผลไปโครงการอื่น
+            </div>
+            {strong.length === 0
+              ? <div style={{ fontSize: 13, color: 'var(--muted)' }}>ไม่มีเสียงเชิงบวกในช่วง/ตัวกรองนี้</div>
+              : strong.map(([t, o]) => (
+                <div key={t} className="wl-row">
+                  <div className="wl-name">
+                    <span style={{ color: 'var(--green)' }}>👍</span>
+                    <Link href={'/voc?q=' + encodeURIComponent(t)} title={t}>{t}</Link>
+                  </div>
+                  <div className="wl-bar" style={{ background: '#dcfce7' }}>
+                    <i style={{ width: Math.round(o.pos / o.c * 100) + '%', background: '#16a34a' }} />
+                  </div>
+                  <div className="wl-meta" style={{ color: 'var(--green)' }}>
+                    พูดถึง {o.c} · บวก {o.pos} ({Math.round(o.pos / o.c * 100)}%)
+                  </div>
                 </div>
-                <div style={{ height: 6, background: '#dcfce7', borderRadius: 6, marginTop: 4 }}>
-                  <div style={{ width: Math.round(o.pos / o.c * 100) + '%', height: '100%', background: '#16a34a', borderRadius: 6 }} />
-                </div>
-              </div>
-            ))}
-            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8 }}>
+              ))}
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 10 }}>
               <Link href="/prioritize" style={{ color: 'var(--blue)' }}>ดูตารางจุดแข็งแบบถ่วงน้ำหนัก →</Link>
             </div>
           </div>
-          <div className="card" style={{ marginBottom: 0 }}>
-            <h3>🏠 Top ชื่อโครงการที่มีเสียงลูกค้าสูงสุด</h3>
-            {topProjects.length === 0 && <div style={{ fontSize: 13, color: 'var(--muted)' }}>ไม่มีข้อมูลในตัวกรองนี้</div>}
-            {topProjects.map(([p, n], i) => (
-              <div key={p} style={{ margin: '9px 0' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 3 }}>
-                  <span>{i + 1}. {p}</span><span style={{ fontWeight: 700, color: '#1f3a93' }}>{n}</span>
-                </div>
-                <div style={{ height: 7, background: '#eef2f7', borderRadius: 6 }}>
-                  <div style={{ width: Math.round(n / maxProj * 100) + '%', height: '100%', background: '#2e6cf0', borderRadius: 6 }} />
-                </div>
-              </div>
-            ))}
+        </div>
+
+        {/* Top 5 โครงการ — แยกเสียงเชิงบวก / เชิงลบ */}
+        <div className="card">
+          <h3>🏘️ Top 5 โครงการ เสียงเชิงบวก / เชิงลบ</h3>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -6, marginBottom: 14 }}>
+            โครงการที่ลูกค้าพูดเชิงบวกและเชิงลบมากที่สุด · {pd.label}
           </div>
+          <div className="top5">
+            <div>
+              <h4 style={{ color: 'var(--green)' }}>👍 เชิงบวกสูงสุด</h4>
+              {topPos.length === 0
+                ? <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>ยังไม่มีเสียงเชิงบวกที่ระบุโครงการ</div>
+                : <ol>{topPos.map(([p, o], i) => (
+                  <li key={p}>
+                    <span>{i + 1}. <Link href={'/voc?q=' + encodeURIComponent(p)}>{p}</Link></span>
+                    <b style={{ color: 'var(--green)' }}>{o.pos} เสียง</b>
+                  </li>
+                ))}</ol>}
+            </div>
+            <div>
+              <h4 style={{ color: 'var(--red)' }}>👎 เชิงลบสูงสุด</h4>
+              {topNeg.length === 0
+                ? <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>ยังไม่มีเสียงเชิงลบที่ระบุโครงการ</div>
+                : <ol>{topNeg.map(([p, o], i) => (
+                  <li key={p}>
+                    <span>{i + 1}. <Link href={'/voc?q=' + encodeURIComponent(p)}>{p}</Link></span>
+                    <b style={{ color: 'var(--red)' }}>{o.neg} เสียง</b>
+                  </li>
+                ))}</ol>}
+            </div>
+          </div>
+          {topPos.length === 0 && topNeg.length === 0 && (
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 10 }}>
+              * ข้อมูลที่นำเข้าต้องจับคู่คอลัมน์ &ldquo;โครงการ&rdquo; ในขั้นนำเข้า จึงจะแสดงที่นี่ได้
+            </div>
+          )}
         </div>
 
         {/* รายการล่าสุด */}
