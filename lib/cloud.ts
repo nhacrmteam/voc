@@ -1,39 +1,57 @@
-// lib/cloud.ts — Word Cloud: นับคำเด่นจาก "ข้อความจริง"
+// lib/cloud.ts — Word Cloud: นับ "คำจริง" จากข้อความเสียงลูกค้า
 //
-// เดิมใช้รายการคำตายตัว 38 คำ → คำที่ลูกค้าพูดจริงแต่ไม่อยู่ในรายการจะไม่ขึ้นเลย
-// (เช่น ลิฟต์ · น้ำท่วม · แอร์ · ทางเท้า) ทำให้พลาดประเด็นใหม่ที่ไม่เคยคาดไว้
+// วิธีตัดคำ: พจนานุกรมนำ (dictionary-first) แล้วค่อยให้ Intl.Segmenter จัดการส่วนที่เหลือ
+//   1) สแกนหาคำใน VOC_VOCAB แบบยาวก่อนสั้น (longest-match) — คำสำคัญของ กคช. จึงถูกเสมอ
+//   2) ช่วงที่ไม่ตรงพจนานุกรม ส่งให้ Intl.Segmenter (ICU) ตัดตามไวยากรณ์ไทย
+//   3) ทิ้งคำหยุดและเศษคำสั้น (≤2 อักษรที่ไม่อยู่ในพจนานุกรม)
 //
-// ตอนนี้ตัดคำภาษาไทยจริงด้วย Intl.Segmenter (ICU dictionary — มีในเบราว์เซอร์สมัยใหม่ทุกตัว)
-// แล้วรวมคำคู่ที่มักอยู่ติดกันเป็นคำเดียว (น้ำ+ท่วม → น้ำท่วม · ประทับ+ใจ → ประทับใจ)
-// ถ้าเบราว์เซอร์เก่าไม่มี Segmenter จะถอยไปใช้รายการคำเดิมโดยอัตโนมัติ
+// ทำไมต้องมีพจนานุกรมนำ: ICU ตัดบางคำผิด เช่น "ต้องเตรียมเอกสาร" → "ต้องเต|รี|ยม|เอกสาร"
+// และไม่รวมคำประสมที่เป็นศัพท์เฉพาะ เช่น "เจ้า|หน้าที่" "ส่วน|กลาง" "ประทับ|ใจ"
+//
+// เพิ่มคำใหม่ได้ที่ VOC_VOCAB ด้านล่าง — คำที่ยาวกว่าจะถูกจับก่อนเสมอ
 import type { Voc } from './data';
 
-// คำสำคัญที่รู้จัก — ใช้เป็นตัวช่วยรวมคำ และเป็นตัวสำรองเมื่อไม่มี Intl.Segmenter
+// คำสำคัญ/คำประสมในบริบทการเคหะแห่งชาติ — จับก่อนตัวตัดคำอัตโนมัติ
 export const VOC_VOCAB = [
-  'ระบบจองออนไลน์', 'โอนกรรมสิทธิ์', 'ค่าส่วนกลาง', 'เจ้าหน้าที่', 'สาธารณูปโภค',
-  'จอง', 'คิว', 'ซ่อม', 'ประปา', 'ไฟ', 'ส่วนกลาง', 'สะอาด', 'สกปรก',
-  'บริการ', 'ประทับใจ', 'สุภาพ', 'เช่าซื้อ', 'สัญญา', 'เอกสาร',
-  'ผ่อน', 'ค่าเช่า', 'ชำระ', 'สินเชื่อ', 'ดอกเบี้ย', 'วงเงิน', 'ทำเล', 'เดินทาง', 'รถไฟฟ้า',
-  'โปรโมชั่น', 'ส่วนลด', 'แคมเปญ', 'ราคา', 'เว็บไซต์', 'อัปเดต', 'ขัดข้อง', 'ล่าช้า', 'ติดตาม',
-  'จอดรถ', 'มืด', 'ปลอดภัย', 'ลิฟต์', 'ขยะ', 'น้ำท่วม', 'แอร์', 'รั่ว', 'ชำรุด',
+  // งานบริการชุมชน
+  'พื้นที่ส่วนกลาง', 'ค่าส่วนกลาง', 'ส่วนกลาง', 'สาธารณูปโภค', 'น้ำประปา', 'ประปา', 'น้ำท่วม', 'น้ำรั่ว',
+  'ไฟฟ้าดับ', 'ไฟส่องสว่าง', 'ไฟทางเดิน', 'ลานจอดรถ', 'ที่จอดรถ', 'จอดรถ', 'ลิฟต์', 'แอร์',
+  'ขยะ', 'ความสะอาด', 'สะอาด', 'สกปรก', 'ชำรุด', 'ซ่อมแซม', 'แจ้งซ่อม', 'ซ่อม', 'ปลอดภัย', 'มืด',
+  // การขาย/สัญญา
+  'โอนกรรมสิทธิ์', 'กรรมสิทธิ์', 'ทำสัญญา', 'สัญญา', 'เตรียมเอกสาร', 'เอกสาร', 'เช่าซื้อ', 'เงินดาวน์', 'ดาวน์',
+  'จองสิทธิ์', 'ระบบจองออนไลน์', 'จองออนไลน์', 'ใบจอง', 'จอง', 'คิว', 'ราคา', 'ทำเล', 'โครงการ',
+  // การเงิน
+  'ผ่อนชำระ', 'ผ่อนผัน', 'ผ่อน', 'ค่างวด', 'ค่าเช่า', 'ค้างชำระ', 'ชำระ', 'สินเชื่อ', 'ดอกเบี้ย', 'วงเงิน', 'รายได้',
+  // บริการ/ช่องทาง
+  'เจ้าหน้าที่', 'ให้บริการ', 'บริการ', 'สาขา', 'เว็บไซต์', 'ออนไลน์', 'ขัดข้อง', 'ล่าช้า', 'ติดตาม', 'ตรวจสอบ',
+  'สอบถาม', 'เงื่อนไข', 'คำแนะนำ', 'แนะนำ', 'ร้องเรียน', 'ข้อเสนอแนะ', 'ประชาสัมพันธ์',
+  // ความรู้สึก
+  'ประทับใจ', 'ชื่นชม', 'พึงพอใจ', 'สุภาพ', 'เป็นกันเอง', 'รวดเร็ว', 'ใส่ใจ', 'ผิดหวัง', 'ไม่พอใจ',
+  // การตลาด
+  'โปรโมชั่น', 'ส่วนลด', 'แคมเปญ', 'รถไฟฟ้า', 'เดินทาง',
 ];
 
-// คำหยุด — คำเชื่อม/สรรพนาม/คำช่วย ที่พบบ่อยแต่ไม่บอกประเด็น
+// คำหยุด — พบบ่อยแต่ไม่บอกประเด็น
 const STOP = new Set([
   'และ', 'หรือ', 'แต่', 'ที่', 'ซึ่ง', 'ของ', 'ให้', 'ได้', 'ไม่', 'ไม่ได้', 'เป็น', 'อยู่', 'คือ', 'มี', 'จะ',
   'ก็', 'ว่า', 'กับ', 'จาก', 'ใน', 'บน', 'ถึง', 'ๆ', 'มาก', 'ครับ', 'ค่ะ', 'คะ', 'นะ', 'ด้วย', 'แล้ว',
   'ผม', 'ดิฉัน', 'ฉัน', 'เรา', 'ท่าน', 'เขา', 'มัน', 'นี้', 'นั้น', 'ทาง', 'การ', 'ความ', 'อย่าง', 'อัน',
-  'ต้อง', 'ควร', 'อยาก', 'เลย', 'ยัง', 'กว่า', 'ทุก', 'บาง', 'หลาย', 'มา', 'ไป', 'ทำ', 'ให้ได้',
-  'เมื่อ', 'ถ้า', 'เพราะ', 'จึง', 'ตาม', 'เอง', 'ขอ', 'ช่วย', 'รบกวน', 'หน่อย', 'เท่า', 'ที', 'ไร',
-  'ดี', 'ใจ', 'คน', 'วัน', 'ครั้ง', 'เรื่อง', 'ตัว', 'อีก', 'พอ', 'ทั้ง', 'ต่อ', 'ทำไม', 'อะไร', 'ไหม',
+  'ต้อง', 'ควร', 'อยาก', 'เลย', 'ยัง', 'กว่า', 'ทุก', 'บาง', 'หลาย', 'มา', 'ไป', 'ทำ', 'เมื่อ', 'ถ้า',
+  'เพราะ', 'จึง', 'ตาม', 'เอง', 'ขอ', 'ช่วย', 'รบกวน', 'หน่อย', 'เท่า', 'ที', 'ไร', 'ดี', 'ใจ', 'คน',
+  'วัน', 'ครั้ง', 'เรื่อง', 'ตัว', 'อีก', 'พอ', 'ทั้ง', 'ต่อ', 'ทำไม', 'อะไร', 'ไหม', 'สำหรับ', 'ครบ',
+  'เดือน', 'ปี', 'บ้าง', 'ทราบ', 'เห็น', 'ออก', 'เข้า', 'ขึ้น', 'ลง', 'กี่', 'ไหร่', 'เอา', 'ผ่าน', 'อ่อน',
+  'ค้าง', 'กด', 'วาง', 'เก็บ', 'ดูแล', 'แจ้ง', 'ส่ง', 'คำ', 'ไหล', 'ห้อง', 'อาคาร', 'ชั้น', 'จุด',
 ]);
 
-const MIN_HITS = 2;     // ต้องปรากฏในอย่างน้อยกี่ "เสียง" จึงนับเป็นคำเด่น
+const MIN_HITS = 2;     // ต้องพบในอย่างน้อยกี่ "เสียง" จึงนับเป็นคำเด่น
 const MAX_WORDS = 40;   // จำนวนคำสูงสุดใน cloud
-const MIN_CHARS = 2;    // ความยาวคำต่ำสุด
 
 type Seg = { segment: string; isWordLike?: boolean };
 type SegmenterLike = { segment: (s: string) => Iterable<Seg> };
+
+// พจนานุกรมเรียงยาว→สั้น เพื่อให้ longest-match ทำงานถูก
+const DICT = [...VOC_VOCAB].sort((a, b) => b.length - a.length);
+const DICT_SET = new Set(VOC_VOCAB);
 
 let segmenter: SegmenterLike | null | undefined;
 function getSegmenter(): SegmenterLike | null {
@@ -45,23 +63,47 @@ function getSegmenter(): SegmenterLike | null {
   return segmenter;
 }
 
+/** คำที่เก็บไว้นับได้หรือไม่ — ตัดคำหยุดและเศษคำสั้นที่ไม่อยู่ในพจนานุกรม */
+function keep(w: string): boolean {
+  if (!w || STOP.has(w)) return false;
+  if (DICT_SET.has(w)) return true;
+  if (w.length <= 2) return false;                 // เศษจากการตัดคำ เช่น "รี" "ยม"
+  return !/^[\d\s\p{P}]+$/u.test(w);               // ตัวเลข/เครื่องหมายล้วน
+}
+
 /**
- * ตัดข้อความเป็นรายการคำ พร้อมบอกว่าคำนั้น "ติดกับคำก่อนหน้าโดยตรง" หรือไม่
- * adj = false เมื่อมีช่องว่าง/เครื่องหมาย/คำหยุดคั่น — ใช้กันไม่ให้รวมคำคู่ข้ามขอบประโยค
- * (ไม่งั้นจะได้คำประหลาดอย่าง "ประทับชื่นชม" จากท้ายประโยคหนึ่งต่อหัวอีกประโยค)
+ * ตัดข้อความเป็นคำ — พจนานุกรมนำ แล้วให้ Segmenter จัดการส่วนที่เหลือ
  */
-function tokenize(text: string, seg: SegmenterLike): { w: string; adj: boolean }[] {
-  const out: { w: string; adj: boolean }[] = [];
-  let broken = true;
-  for (const s of seg.segment(text)) {
-    const raw = s.segment;
-    if (s.isWordLike === false || /^[\d\s\p{P}]+$/u.test(raw)) { broken = true; continue; }
-    const w = raw.trim();
-    if (w.length < MIN_CHARS || STOP.has(w)) { broken = true; continue; }
-    out.push({ w, adj: !broken });
-    broken = false;
+function tokenize(text: string, seg: SegmenterLike | null): string[] {
+  const out: string[] = [];
+  const rest: string[] = [];      // ช่วงที่ไม่ตรงพจนานุกรม รอให้ Segmenter ตัด
+  let buf = '';
+  let i = 0;
+  while (i < text.length) {
+    const hit = DICT.find(d => text.startsWith(d, i));
+    if (hit) {
+      if (buf) { rest.push(buf); buf = ''; }
+      out.push(hit);
+      i += hit.length;
+    } else {
+      buf += text[i];
+      i++;
+    }
   }
-  return out;
+  if (buf) rest.push(buf);
+
+  rest.forEach(chunk => {
+    if (seg) {
+      for (const s of seg.segment(chunk)) {
+        if (s.isWordLike === false) continue;
+        out.push(s.segment.trim());
+      }
+    } else {
+      // ไม่มีตัวตัดคำ (เบราว์เซอร์เก่า) → ใช้เฉพาะคำจากพจนานุกรมที่จับได้แล้ว
+      chunk.split(/\s+/).forEach(w => out.push(w));
+    }
+  });
+  return out.filter(keep);
 }
 
 /**
@@ -74,79 +116,20 @@ export function computeCloud(rows: Voc[]): [string, number][] {
   if (!texts.length) return [];
 
   const seg = getSegmenter();
-  // ---- เบราว์เซอร์เก่าไม่มีตัวตัดคำ → ถอยไปใช้รายการคำที่รู้จัก ----
-  if (!seg) {
-    return VOC_VOCAB
-      .map(w => [w, texts.filter(t => t.includes(w)).length] as [string, number])
-      .filter(p => p[1] > 0)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, MAX_WORDS);
-  }
-
-  const uni = new Map<string, Set<number>>();   // คำเดี่ยว → เซ็ตของเสียงที่พบ
-  const bi = new Map<string, Set<number>>();    // คำคู่ติดกัน → เซ็ตของเสียงที่พบ
-  const add = (m: Map<string, Set<number>>, w: string, idx: number) => {
-    let s = m.get(w); if (!s) { s = new Set(); m.set(w, s); }
-    s.add(idx);
-  };
-
-  const pairParts = new Map<string, [string, string]>();   // คำคู่ → คำย่อย 2 ตัว
-  texts.forEach((t, idx) => {
-    const ws = tokenize(t, seg);
-    ws.forEach((cur, i) => {
-      add(uni, cur.w, idx);
-      const next = ws[i + 1];
-      if (!next || !next.adj) return;                      // มีอะไรคั่น = ไม่ใช่คำประสม
-      const pair = cur.w + next.w;
-      if (pair.length > 14) return;
-      add(bi, pair, idx);
-      pairParts.set(pair, [cur.w, next.w]);
-    });
+  const count = new Map<string, number>();
+  texts.forEach(t => {
+    // นับคำละครั้งต่อหนึ่งเสียง
+    new Set(tokenize(t, seg)).forEach(w => count.set(w, (count.get(w) || 0) + 1));
   });
 
-  const hits = (m: Map<string, Set<number>>, w: string) => m.get(w)?.size || 0;
-  const known = new Set(VOC_VOCAB);
-
-  // เก็บคำคู่ที่ "อยู่ติดกันแทบทุกครั้ง" → ถือเป็นคำเดียว
-  // เลือกแบบ greedy จากคำคู่ที่พบบ่อยที่สุดก่อน และห้ามใช้คำย่อยซ้ำ
-  // (ไม่งั้นจะได้ทั้ง "น้ำท่วม" และ "ท่วมขัง" ซ้อนกัน)
-  const merged = new Map<string, number>();
-  const consumed = new Set<string>();
-  Array.from(bi.entries())
-    .map(([pair, s]) => [pair, s.size] as [string, number])
+  const all = Array.from(count.entries())
     .filter(([, n]) => n >= MIN_HITS)
-    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
-    .forEach(([pair, n]) => {
-      const parts = pairParts.get(pair);
-      if (!parts) return;
-      const [a, b] = parts;
-      if (consumed.has(a) || consumed.has(b)) return;       // คำย่อยถูกใช้ไปแล้ว
-      const na = hits(uni, a), nb = hits(uni, b);
-      // รวมเมื่อเป็นคำที่รู้จัก หรือทั้งสองคำแทบไม่เคยปรากฏแยกกัน
-      if (known.has(pair) || (n >= na * 0.7 && n >= nb * 0.7)) {
-        merged.set(pair, n);
-        consumed.add(a); consumed.add(b);
-      }
-    });
+    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length);
 
-  const single = Array.from(uni.entries())
-    .map(([w, s]) => [w, s.size] as [string, number])
-    .filter(([w, n]) => n >= MIN_HITS && !consumed.has(w));
+  // ตัดคำสั้นที่ซ้อนอยู่ในคำยาวกว่าและนับได้ไม่มากกว่ากัน
+  // เช่น มี "น้ำประปา" (8) แล้ว ไม่ต้องแสดง "ประปา" (8) ซ้ำ — แต่ "ผ่อน" (15) ยังอยู่ แม้มี "ผ่อนผัน" (7)
+  const kept = all.filter(([w, n]) =>
+    !all.some(([lw, ln]) => lw !== w && lw.includes(w) && ln >= n));
 
-  // ยืดคำให้เต็มด้วยคำที่รู้จัก — "ประทับ" → "ประทับใจ" (เพราะ "ใจ" ถูกตัดเป็นคำหยุด)
-  const result = new Map<string, number>([...merged.entries(), ...single]);
-  VOC_VOCAB.filter(v => v.length >= 4).forEach(v => {
-    const nv = texts.filter(t => t.includes(v)).length;
-    if (nv < MIN_HITS) return;
-    let replaced = false;
-    Array.from(result.keys()).forEach(w => {
-      if (w !== v && v.includes(w) && result.get(w)! <= nv * 1.2) { result.delete(w); replaced = true; }
-    });
-    if (replaced || result.has(v)) result.set(v, nv);
-  });
-
-  return Array.from(result.entries())
-    .filter(([w]) => !STOP.has(w))
-    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
-    .slice(0, MAX_WORDS);
+  return kept.slice(0, MAX_WORDS);
 }
