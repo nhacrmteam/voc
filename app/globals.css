@@ -71,6 +71,9 @@ input[type=file]{width:auto;padding:0;border:none}
 .jr-card .bar i{display:block;height:100%;background:var(--jc);border-radius:6px}
 .jr-flow{font-size:12px;color:var(--muted);margin:-4px 0 12px;line-height:1.8}
 
+@media(max-width:880px){
+  .dash-2col{grid-template-columns:1fr!important}
+}
 @media(max-width:560px){
   .kcard .kval{font-size:25px}
   .sum-item .v{font-size:24px}
