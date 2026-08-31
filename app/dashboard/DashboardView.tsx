@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import type { Voc } from '../../lib/data';
-import { PROJECT_TYPES, JOURNEYS, JOURNEY_TH, JOURNEY_COLOR } from '../../lib/data';
+import { PROJECT_TYPES, CHANNELS, JOURNEYS, JOURNEY_TH, JOURNEY_COLOR } from '../../lib/data';
 
 // ปีงบประมาณ (พ.ศ.) — ปีงบ Y เริ่ม 1 ต.ค. ปี (Y-1)
 // คำนวณปีงบ+ไตรมาส "ปัจจุบัน" จากวันที่จริง (เลื่อนตามเวลาเอง)
@@ -47,6 +47,100 @@ function Delta({ now, prev, label, invert = false }: { now: number; prev: number
   return (
     <div className={'kdelta ' + (good ? 'up' : 'down')}>
       {diff > 0 ? '▲' : '▼'} {pct}% {label}
+    </div>
+  );
+}
+
+const SENT_COLOR = { pos: '#16a34a', neu: '#f59e0b', neg: '#dc2626' };   // เขียว/เหลือง/แดง — ชุดเดียวกับหน้า 8 ช่องทาง
+
+/** กราฟผสม: แท่ง = จำนวนเสียง · เส้น = %เชิงบวก และ %เชิงลบ (แกน % อยู่ขวา) */
+function TrendCombo({ data }: { data: { label: string; n: number; pos: number; neg: number }[] }) {
+  const W = 760, H = 260, L = 46, R = 40, T = 14, B = 34;
+  const iw = W - L - R, ih = H - T - B;
+  const maxN = Math.max(...data.map(d => d.n), 1);
+  const niceMax = Math.ceil(maxN / 5) * 5 || 5;
+  const x = (i: number) => L + (data.length > 1 ? (i / (data.length - 1)) * iw : iw / 2);
+  const yN = (v: number) => T + ih - (v / niceMax) * ih;
+  const yP = (v: number) => T + ih - (v / 100) * ih;
+  const bw = Math.max(8, Math.min(38, iw / data.length * 0.55));
+  const line = (key: 'pos' | 'neg') => data.map((d, i) => `${x(i).toFixed(1)},${yP(d[key]).toFixed(1)}`).join(' ');
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: 'block', minWidth: 520 }} role="img"
+        aria-label="กราฟแนวโน้มจำนวนเสียงลูกค้าและสัดส่วน sentiment รายเดือน">
+        {/* เส้นกริดแนวนอน + แกนซ้าย (จำนวน) + แกนขวา (%) */}
+        {[0, 0.25, 0.5, 0.75, 1].map(p => {
+          const yy = T + ih - p * ih;
+          return (
+            <g key={p}>
+              <line x1={L} y1={yy} x2={W - R} y2={yy} stroke="#e8edf5" strokeWidth={1} />
+              <text x={L - 7} y={yy + 3.5} textAnchor="end" fontSize={10} fill="#94a3b8">{Math.round(niceMax * p).toLocaleString()}</text>
+              <text x={W - R + 7} y={yy + 3.5} fontSize={10} fill="#94a3b8">{Math.round(100 * p)}</text>
+            </g>
+          );
+        })}
+        {/* แท่งจำนวนเสียง */}
+        {data.map((d, i) => (
+          <rect key={d.label} x={x(i) - bw / 2} y={yN(d.n)} width={bw} height={Math.max(0, T + ih - yN(d.n))}
+            fill="#c7d7f7" rx={3}><title>{d.label}: {d.n.toLocaleString()} เสียง</title></rect>
+        ))}
+        {/* เส้น % เชิงบวก / เชิงลบ */}
+        <polyline points={line('pos')} fill="none" stroke={SENT_COLOR.pos} strokeWidth={2.5} strokeLinejoin="round" />
+        <polyline points={line('neg')} fill="none" stroke={SENT_COLOR.neg} strokeWidth={2.5} strokeLinejoin="round" />
+        {data.map((d, i) => (
+          <g key={'p' + d.label}>
+            <circle cx={x(i)} cy={yP(d.pos)} r={3.5} fill={SENT_COLOR.pos}><title>{d.label}: เชิงบวก {d.pos}%</title></circle>
+            <circle cx={x(i)} cy={yP(d.neg)} r={3.5} fill={SENT_COLOR.neg}><title>{d.label}: เชิงลบ {d.neg}%</title></circle>
+          </g>
+        ))}
+        {/* ชื่อเดือน */}
+        {data.map((d, i) => (
+          <text key={'x' + d.label} x={x(i)} y={H - 12} textAnchor="middle" fontSize={10.5} fill="#64748b">{d.label}</text>
+        ))}
+        <text x={12} y={T + ih / 2} fontSize={10} fill="#94a3b8" transform={`rotate(-90 12 ${T + ih / 2})`} textAnchor="middle">จำนวน</text>
+        <text x={W - 8} y={T + ih / 2} fontSize={10} fill="#94a3b8" textAnchor="middle">%</text>
+      </svg>
+      <div style={{ display: 'flex', gap: 18, justifyContent: 'center', fontSize: 12, marginTop: 4, flexWrap: 'wrap' }}>
+        <span><span style={{ display: 'inline-block', width: 14, height: 9, background: '#c7d7f7', borderRadius: 2, marginRight: 6 }} />จำนวน VOC</span>
+        <span><span style={{ display: 'inline-block', width: 14, height: 3, background: SENT_COLOR.pos, marginRight: 6, verticalAlign: 'middle' }} />% เชิงบวก</span>
+        <span><span style={{ display: 'inline-block', width: 14, height: 3, background: SENT_COLOR.neg, marginRight: 6, verticalAlign: 'middle' }} />% เชิงลบ</span>
+      </div>
+    </div>
+  );
+}
+
+/** โดนัทสัดส่วน sentiment — เขียว/เหลือง/แดง */
+function SentDonut({ pos, neu, neg }: { pos: number; neu: number; neg: number }) {
+  const total = pos + neu + neg;
+  const segs = [
+    { lab: 'เชิงบวก', v: pos, c: SENT_COLOR.pos },
+    { lab: 'เป็นกลาง', v: neu, c: SENT_COLOR.neu },
+    { lab: 'เชิงลบ', v: neg, c: SENT_COLOR.neg },
+  ];
+  let acc = 0;
+  return (
+    <div style={{ textAlign: 'center' }}>
+      <svg viewBox="0 0 42 42" width={190} height={190} role="img" aria-label="สัดส่วน sentiment">
+        <circle cx="21" cy="21" r="15.915" fill="none" stroke="#eef2f7" strokeWidth="6" />
+        {total > 0 && segs.map(s => {
+          const p = s.v / total * 100;
+          const el = <circle key={s.lab} cx="21" cy="21" r="15.915" fill="none" stroke={s.c} strokeWidth="6"
+            strokeDasharray={`${p} ${100 - p}`} strokeDashoffset={25 - acc} ><title>{s.lab} {s.v.toLocaleString()} ({Math.round(p)}%)</title></circle>;
+          acc += p;
+          return el;
+        })}
+        <text x="21" y="20" textAnchor="middle" style={{ fontSize: 5.5, fontWeight: 700, fill: 'var(--ink)' }}>{total.toLocaleString()}</text>
+        <text x="21" y="25.5" textAnchor="middle" style={{ fontSize: 2.6, fill: 'var(--muted)' }}>เสียงลูกค้า</text>
+      </svg>
+      <div style={{ marginTop: 8 }}>
+        {segs.map(s => (
+          <div key={s.lab} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '4px 6px' }}>
+            <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: s.c, marginRight: 7 }} />{s.lab}</span>
+            <b>{s.v.toLocaleString()} ({total ? Math.round(s.v / total * 100) : 0}%)</b>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -177,6 +271,45 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
   const prevNegPct = Math.round(fPrev.filter(r => r.sentiment === 'Negative').length / pTotal * 100);
   const prevHigh = fPrev.filter(r => r.priority === 'High').length;
 
+  // ---- แนวโน้มรายเดือน + sentiment (12 เดือนของปีงบที่เลือก / 12 เดือนล่าสุดถ้าเลือกทั้งหมด) ----
+  const TH_MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  const monthly = useMemo(() => {
+    const months: { key: string; label: string }[] = [];
+    if (allTime) {
+      const end = new Date(anchor);
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
+        months.push({ key: d.toISOString().slice(0, 7), label: TH_MON[d.getMonth()] });
+      }
+    } else {
+      // ปีงบเริ่ม ต.ค. ของปี (beYear-543-1) → ก.ย. ของปี (beYear-543)
+      const startY = beYear - 543 - 1;
+      for (let i = 0; i < 12; i++) {
+        const d = new Date(startY, 9 + i, 1);
+        months.push({ key: d.toISOString().slice(0, 7), label: TH_MON[d.getMonth()] });
+      }
+    }
+    return months.map(m => {
+      const rs = fBase.filter(r => (r.occurredAt || '').slice(0, 7) === m.key);
+      const t = rs.length || 1;
+      return {
+        label: m.label, n: rs.length,
+        pos: Math.round(rs.filter(r => r.sentiment === 'Positive').length / t * 100),
+        neg: Math.round(rs.filter(r => r.sentiment === 'Negative').length / t * 100),
+      };
+    });
+  }, [fBase, allTime, anchor, beYear]);
+
+  // ---- สัดส่วน sentiment (ช่วงที่เลือก) ----
+  const neu = f.filter(r => r.sentiment === 'Neutral').length;
+
+  // ---- เสียงลูกค้าแยกตาม 8 ช่องทาง (ช่วงที่เลือก) ----
+  const CH_COLOR = ['#1f3a93', '#2e6cf0', '#60a5fa', '#16a34a', '#38bdf8', '#f59e0b', '#dc2626', '#8b5cf6'];
+  const chanRows = CHANNELS.map((name, i) => ({
+    name, n: f.filter(r => r.channel === name).length, color: CH_COLOR[i % CH_COLOR.length],
+  }));
+  const chanMax = Math.max(...chanRows.map(c => c.n), 1);
+
   // เสียงลูกค้าตาม Customer Journey (ช่วงที่เลือก)
   const jrCount: Record<string, number> = {};
   f.forEach(r => { if (r.journey) jrCount[r.journey] = (jrCount[r.journey] || 0) + 1; });
@@ -195,7 +328,6 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
   const topProjects = Object.entries(projAgg).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const maxProj = topProjects.length ? topProjects[0][1] : 1;
 
-  const trend = dateSeries(f, pd.from, pd.to, 12);
   const sp = tick ? (tick.sentiment === 'Positive' ? 'p-pos' : tick.sentiment === 'Negative' ? 'p-neg' : 'p-neu') : 'p-neu';
 
   return (
@@ -311,6 +443,37 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
           </div>
         </div>
 
+        {/* แนวโน้ม & Sentiment + สัดส่วน Sentiment */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2.1fr) minmax(240px,1fr)', gap: 16, marginBottom: 16 }} className="dash-2col">
+          <div className="card" style={{ marginBottom: 0 }}>
+            <h3>📈 แนวโน้มเสียงลูกค้า &amp; Sentiment</h3>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -6, marginBottom: 8 }}>
+              ช่วง: {allTime ? '12 เดือนล่าสุด' : `ปีงบประมาณ ${beYear} (ต.ค. ${String(beYear - 1).slice(-2)} – ก.ย. ${String(beYear).slice(-2)})`}
+            </div>
+            <TrendCombo data={monthly} />
+          </div>
+          <div className="card" style={{ marginBottom: 0 }}>
+            <h3>🎭 สัดส่วน Sentiment</h3>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -6, marginBottom: 8 }}>ภาพรวมทั้ง 8 ช่องทาง · {pd.label}</div>
+            <SentDonut pos={pos} neu={neu} neg={neg} />
+          </div>
+        </div>
+
+        {/* เสียงลูกค้าแยกตาม 8 ช่องทาง */}
+        <div className="card">
+          <h3>📥 เสียงลูกค้าแยกตาม 8 ช่องทาง</h3>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -6, marginBottom: 12 }}>จำนวนรายการที่รับเข้าใน {pd.label}</div>
+          {chanRows.map(c => (
+            <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '7px 0' }}>
+              <div style={{ width: 168, flexShrink: 0, fontSize: 12.5, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
+              <div style={{ flex: 1, background: '#f1f5f9', borderRadius: 5, height: 20, position: 'relative' }}>
+                <div style={{ width: Math.round(c.n / chanMax * 100) + '%', height: '100%', background: c.color, borderRadius: 5, transition: 'width .3s' }} />
+              </div>
+              <div style={{ width: 60, fontSize: 12.5, fontWeight: 700, color: c.color }}>{c.n.toLocaleString()}</div>
+            </div>
+          ))}
+        </div>
+
         {/* เสียงลูกค้าตาม Customer Journey */}
         <div className="card">
           <h3>🧭 เสียงลูกค้าตามเส้นทางลูกค้า (Customer Journey 6 ขั้น)</h3>
@@ -338,11 +501,6 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
           </div>
         </div>
 
-        {/* แนวโน้มในช่วงที่เลือก */}
-        <div className="card">
-          <h3>📈 แนวโน้มจำนวนเสียงลูกค้า — {pd.label}</h3>
-          <Spark arr={trend} color="#1f3a93" />
-        </div>
 
         {/* ประเด็นจับตา + Top โครงการ */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16, marginBottom: 16 }}>
