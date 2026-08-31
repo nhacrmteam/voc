@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import type { Voc } from '../../lib/data';
-import { PROJECT_TYPES } from '../../lib/data';
+import { PROJECT_TYPES, JOURNEYS, JOURNEY_TH, JOURNEY_COLOR } from '../../lib/data';
 
 // ปีงบประมาณ (พ.ศ.) — ปีงบ Y เริ่ม 1 ต.ค. ปี (Y-1)
 // คำนวณปีงบ+ไตรมาส "ปัจจุบัน" จากวันที่จริง (เลื่อนตามเวลาเอง)
@@ -35,6 +35,20 @@ function periodRange(be: number, q: string): { from: string; to: string } {
   };
   const [from, to] = m[q] || m.year;
   return { from, to };
+}
+
+/** ตัวเลขเปรียบเทียบกับช่วงก่อน — ▲ ดีขึ้น / ▼ ลดลง */
+function Delta({ now, prev, label, invert = false }: { now: number; prev: number; label: string; invert?: boolean }) {
+  if (!prev) return <div className="kdelta flat">— ไม่มีข้อมูลช่วงก่อน</div>;
+  const diff = now - prev;
+  const pct = Math.round(Math.abs(diff) / prev * 1000) / 10;
+  if (diff === 0) return <div className="kdelta flat">= เท่ากับ{label.replace('เทียบ', '')}</div>;
+  const good = invert ? diff < 0 : diff > 0;   // invert = ตัวเลขลดลงถือว่าดี (เช่น เสียงเชิงลบ)
+  return (
+    <div className={'kdelta ' + (good ? 'up' : 'down')}>
+      {diff > 0 ? '▲' : '▼'} {pct}% {label}
+    </div>
+  );
 }
 
 function Spark({ arr, color }: { arr: number[]; color: string }) {
@@ -128,12 +142,45 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
   const A = new Date(anchor);
   const daysAgo = (n: number) => new Date(A.getTime() - n * 86400000).toISOString().slice(0, 10);
   const inRange = (from: string, to: string) => fBase.filter(r => r.occurredAt >= from && r.occurredAt <= to).length;
+  // เทียบกับช่วงก่อนหน้าที่ยาวเท่ากัน — ผู้บริหารอยากรู้ว่า "ดีขึ้นหรือแย่ลง"
   const cards = [
-    { lab: 'วันนี้ (ล่าสุดในข้อมูล)', n: inRange(anchor, anchor), color: '#1f3a93', spark: dateSeries(fBase, daysAgo(6), anchor, 7) },
-    { lab: '7 วันล่าสุด', n: inRange(daysAgo(6), anchor), color: '#2e6cf0', spark: dateSeries(fBase, daysAgo(13), anchor, 14) },
-    { lab: 'เดือนนี้', n: inRange(daysAgo(29), anchor), color: '#0e7c86', spark: dateSeries(fBase, daysAgo(29), anchor, 15) },
-    { lab: 'ปีงบประมาณ 2569', n: inRange('2025-10-01', '2026-09-30'), color: '#8b5cf6', spark: dateSeries(fBase, daysAgo(29), anchor, 15) },
+    {
+      lab: 'เสียงลูกค้าวันนี้', sub: 'วันล่าสุดในข้อมูล', color: '#2e6cf0',
+      n: inRange(anchor, anchor), prev: inRange(daysAgo(1), daysAgo(1)), pl: 'เทียบเมื่อวาน',
+      spark: dateSeries(fBase, daysAgo(6), anchor, 7),
+    },
+    {
+      lab: 'สัปดาห์นี้', sub: '7 วันล่าสุด', color: '#0ea5e9',
+      n: inRange(daysAgo(6), anchor), prev: inRange(daysAgo(13), daysAgo(7)), pl: 'เทียบสัปดาห์ก่อน',
+      spark: dateSeries(fBase, daysAgo(13), anchor, 14),
+    },
+    {
+      lab: 'เดือนนี้', sub: '30 วันล่าสุด', color: '#0e7c86',
+      n: inRange(daysAgo(29), anchor), prev: inRange(daysAgo(59), daysAgo(30)), pl: 'เทียบเดือนก่อน',
+      spark: dateSeries(fBase, daysAgo(29), anchor, 15),
+    },
+    {
+      lab: 'ปีงบประมาณ ' + maxFY, sub: 'สะสมทั้งปีงบ', color: '#8b5cf6',
+      n: inRange(`${maxFY - 543 - 1}-10-01`, `${maxFY - 543}-09-30`),
+      prev: inRange(`${maxFY - 543 - 2}-10-01`, `${maxFY - 543 - 1}-09-30`), pl: 'เทียบปีก่อน',
+      spark: dateSeries(fBase, daysAgo(29), anchor, 15),
+    },
   ];
+
+  // KPI ของช่วงที่เลือก เทียบกับช่วงก่อนหน้าที่ยาวเท่ากัน
+  const spanMs = new Date(pd.to).getTime() - new Date(pd.from).getTime();
+  const prevFrom = new Date(new Date(pd.from).getTime() - spanMs - 86400000).toISOString().slice(0, 10);
+  const prevTo = new Date(new Date(pd.from).getTime() - 86400000).toISOString().slice(0, 10);
+  const fPrev = fBase.filter(r => r.occurredAt >= prevFrom && r.occurredAt <= prevTo);
+  const pTotal = fPrev.length || 1;
+  const prevPosPct = Math.round(fPrev.filter(r => r.sentiment === 'Positive').length / pTotal * 100);
+  const prevNegPct = Math.round(fPrev.filter(r => r.sentiment === 'Negative').length / pTotal * 100);
+  const prevHigh = fPrev.filter(r => r.priority === 'High').length;
+
+  // เสียงลูกค้าตาม Customer Journey (ช่วงที่เลือก)
+  const jrCount: Record<string, number> = {};
+  f.forEach(r => { if (r.journey) jrCount[r.journey] = (jrCount[r.journey] || 0) + 1; });
+  const jrMax = Math.max(...JOURNEYS.map(j => jrCount[j] || 0), 1);
 
   // ประเด็นที่ต้องจับตา + Top โครงการ (จากช่วงที่เลือก)
   const negTopic: Record<string, { c: number; neg: number }> = {};
@@ -197,34 +244,98 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
         <style>{`@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.6)}70%{box-shadow:0 0 0 7px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}`}</style>
 
         {/* สรุปสะสมทั้งองค์กร (ทุกเสียงตั้งแต่มีระบบ — ค้างไว้เสมอ ไม่ขึ้นกับตัวกรอง) */}
-        <div className="card" style={{ background: 'linear-gradient(135deg,#1f3a93,#16285f)', color: '#fff', border: 'none' }}>
-          <div style={{ fontSize: 12.5, opacity: .85, marginBottom: 10 }}>🗂️ สรุปสะสมทั้งองค์กร — ทุกเสียงลูกค้าตั้งแต่เริ่มมีระบบ</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 14 }}>
-            <div><div style={{ fontSize: 11.5, opacity: .8 }}>เสียงลูกค้าสะสมทั้งหมด</div><div style={{ fontSize: 27, fontWeight: 700 }}>{allTotal.toLocaleString()}</div></div>
-            <div><div style={{ fontSize: 11.5, opacity: .8 }}>% เสียงเชิงบวกรวม</div><div style={{ fontSize: 27, fontWeight: 700, color: '#86efac' }}>{allPosPct}%</div></div>
-            <div><div style={{ fontSize: 11.5, opacity: .8 }}>% เสียงเชิงลบรวม</div><div style={{ fontSize: 27, fontWeight: 700, color: '#fca5a5' }}>{allNegPct}%</div></div>
-            <div><div style={{ fontSize: 11.5, opacity: .8 }}>เรื่องเร่งด่วนสะสม (High)</div><div style={{ fontSize: 27, fontWeight: 700, color: '#fcd34d' }}>{allHigh.toLocaleString()}</div></div>
-            <div><div style={{ fontSize: 11.5, opacity: .8 }}>ประเด็นเฝ้าระวัง (ซ้ำ ≥3)</div><div style={{ fontSize: 27, fontWeight: 700, color: '#fcd34d' }}>{recurringCount.toLocaleString()}</div></div>
+        <div className="sumcard">
+          <div className="sum-head">🗂️ สรุปสะสมทั้งองค์กร <span>ทุกเสียงลูกค้าตั้งแต่เริ่มมีระบบ — ไม่ขึ้นกับตัวกรองด้านบน</span></div>
+          <div className="sum-grid">
+            <div className="sum-item">
+              <div className="l">เสียงลูกค้าสะสมทั้งหมด</div>
+              <div className="v">{allTotal.toLocaleString()}</div>
+              <div className="s">จาก 8 ช่องทาง</div>
+            </div>
+            <div className="sum-item">
+              <div className="l">เสียงเชิงบวก</div>
+              <div className="v" style={{ color: '#86efac' }}>{allPosPct}%</div>
+              <div className="s">{allPos.toLocaleString()} รายการ</div>
+            </div>
+            <div className="sum-item">
+              <div className="l">เสียงเชิงลบ</div>
+              <div className="v" style={{ color: '#fca5a5' }}>{allNegPct}%</div>
+              <div className="s">{allNeg.toLocaleString()} รายการ</div>
+            </div>
+            <div className="sum-item">
+              <div className="l">เรื่องเร่งด่วนสะสม</div>
+              <div className="v" style={{ color: '#fcd34d' }}>{allHigh.toLocaleString()}</div>
+              <div className="s">ความรุนแรงระดับ High</div>
+            </div>
+            <div className="sum-item">
+              <div className="l">ประเด็นเฝ้าระวัง</div>
+              <div className="v" style={{ color: '#fcd34d' }}>{recurringCount.toLocaleString()}</div>
+              <div className="s">ประเด็นที่เกิดซ้ำ ≥3 ครั้ง</div>
+            </div>
           </div>
         </div>
 
         {/* การ์ดเวลา + sparkline */}
-        <div className="cards">
+        <div className="kgrid">
           {cards.map(c => (
-            <div key={c.lab} className="kpi">
-              <div className="lab">{c.lab}</div>
-              <div className="val" style={{ color: c.color }}>{c.n.toLocaleString()}</div>
-              <Spark arr={c.spark} color={c.color} />
+            <div key={c.lab} className="kcard" style={{ ['--kc' as string]: c.color }}>
+              <div className="klab">{c.lab} <span style={{ opacity: .65 }}>· {c.sub}</span></div>
+              <div className="kval">{c.n.toLocaleString()}</div>
+              <Delta now={c.n} prev={c.prev} label={c.pl} />
+              <div className="kspark"><Spark arr={c.spark} color={c.color} /></div>
             </div>
           ))}
         </div>
 
         {/* KPI ตามช่วงที่เลือก */}
-        <div className="cards">
-          <div className="kpi"><div className="lab">เสียงลูกค้าทั้งหมด ({pd.label})</div><div className="val">{f.length.toLocaleString()}</div></div>
-          <div className="kpi"><div className="lab">เสียงเชิงบวก (% Positive)</div><div className="val" style={{ color: 'var(--green)' }}>{posPct}%</div></div>
-          <div className="kpi"><div className="lab">เสียงเชิงลบ (% Negative)</div><div className="val" style={{ color: 'var(--red)' }}>{negPct}%</div></div>
-          <div className="kpi"><div className="lab">เรื่องเร่งด่วน (High)</div><div className="val" style={{ color: 'var(--amber)' }}>{high}</div></div>
+        <div className="kgrid">
+          <div className="kcard" style={{ ['--kc' as string]: '#1f3a93' }}>
+            <div className="klab">เสียงลูกค้าทั้งหมด <span style={{ opacity: .65 }}>· {pd.label}</span></div>
+            <div className="kval">{f.length.toLocaleString()}</div>
+            <Delta now={f.length} prev={fPrev.length} label="จากช่วงก่อน" />
+          </div>
+          <div className="kcard" style={{ ['--kc' as string]: '#16a34a' }}>
+            <div className="klab">เสียงเชิงบวก (% Positive)</div>
+            <div className="kval">{posPct}%</div>
+            <Delta now={posPct} prev={prevPosPct} label="จากช่วงก่อน" />
+          </div>
+          <div className="kcard" style={{ ['--kc' as string]: '#dc2626' }}>
+            <div className="klab">เสียงเชิงลบ (% Negative)</div>
+            <div className="kval">{negPct}%</div>
+            <Delta now={negPct} prev={prevNegPct} label="จากช่วงก่อน" invert />
+          </div>
+          <div className="kcard" style={{ ['--kc' as string]: '#f59e0b' }}>
+            <div className="klab">เรื่องเร่งด่วน (High)</div>
+            <div className="kval">{high.toLocaleString()}</div>
+            <Delta now={high} prev={prevHigh} label="จากช่วงก่อน" invert />
+          </div>
+        </div>
+
+        {/* เสียงลูกค้าตาม Customer Journey */}
+        <div className="card">
+          <h3>🧭 เสียงลูกค้าตามเส้นทางลูกค้า (Customer Journey 6 ขั้น)</h3>
+          <div className="jr-flow">
+            {JOURNEYS.map((j, i) => (
+              <span key={j}>{i > 0 && ' → '}{JOURNEY_TH[j]}</span>
+            ))}
+          </div>
+          <div className="jr-grid">
+            {JOURNEYS.map(j => {
+              const n = jrCount[j] || 0;
+              return (
+                <Link key={j} href={'/voc'} className="jr-card" style={{ ['--jc' as string]: JOURNEY_COLOR[j].fg, display: 'block' }}
+                  title={JOURNEY_TH[j] + ' (' + j + ') — ' + n.toLocaleString() + ' รายการ'}>
+                  <div className="en">{j}</div>
+                  <div className="n">{n.toLocaleString()}</div>
+                  <div className="th">{JOURNEY_TH[j]}</div>
+                  <div className="bar"><i style={{ width: Math.round(n / jrMax * 100) + '%' }} /></div>
+                </Link>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 10 }}>
+            นับตามตัวกรองด้านบน ({pd.label}) · AI จำแนกขั้นจากประเด็นในข้อความ และใช้ช่องทางต้นทางช่วยเมื่อกำกวม
+          </div>
         </div>
 
         {/* แนวโน้มในช่วงที่เลือก */}
