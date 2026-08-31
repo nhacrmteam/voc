@@ -29,6 +29,9 @@ tbody tr:hover{background:#f8fafc}
 .p-pos{background:#dcfce7;color:#15803d}.p-neu{background:#f1f5f9;color:#475569}.p-neg{background:#fee2e2;color:#b91c1c}
 .p-hi{background:#fee2e2;color:#b91c1c}.p-md{background:#fef3c7;color:#b45309}.p-lo{background:#e0f2fe;color:#0369a1}
 input{font-family:inherit;font-size:14px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;width:100%}
+/* ช่องติ๊ก/ตัวเลือก ต้องไม่โดนกฎ width:100% ด้านบน ไม่งั้นจะยืดเต็มบรรทัด */
+input[type=checkbox],input[type=radio]{width:auto;padding:0;border:none;border-radius:0}
+input[type=file]{width:auto;padding:0;border:none}
 .tag{background:#eef2ff;color:var(--navy);border-radius:6px;padding:2px 8px;font-size:11px}
 .pipe{display:flex;height:16px;border-radius:8px;overflow:hidden;border:1px solid var(--line);margin-bottom:10px}
 .btn{display:inline-block;background:var(--blue);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-family:inherit;font-size:13px;cursor:pointer}
@@ -40,8 +43,45 @@ input{font-family:inherit;font-size:14px;padding:9px 12px;border:1px solid var(-
 .chan-bar:hover{transform:translateY(-3px)}
 .chan-bar:hover>div:nth-child(2){box-shadow:0 6px 14px rgba(31,58,147,.25)}
 
+/* ============================================================
+   ขนาดตัวอักษร 4 ระดับ (ผู้สูงอายุ/ผู้มีปัญหาสายตา)
+   ใช้ zoom กับ .main เพราะสไตล์ทั้งระบบใช้หน่วย px — ปรับ font-size อย่างเดียวจะไม่มีผล
+   แถบเมนูซ้ายคงขนาดเดิม เพื่อไม่ให้เมนูล้นจอ
+   ============================================================ */
+html[data-font="sm"] .main{zoom:.9}
+html[data-font="lg"] .main{zoom:1.15}
+html[data-font="xl"] .main{zoom:1.32}
+/* เผื่อเบราว์เซอร์ที่ไม่รองรับ zoom — อย่างน้อยตัวอักษรที่สืบทอดขนาดจะใหญ่ขึ้น */
+@supports not (zoom:1){
+  html[data-font="sm"] .main{font-size:12.6px}
+  html[data-font="lg"] .main{font-size:16.1px}
+  html[data-font="xl"] .main{font-size:18.5px}
+}
+
+.fontsize{margin-top:auto;padding:10px 11px;border:1px solid rgba(255,255,255,.2);border-radius:9px;background:rgba(255,255,255,.06);margin-bottom:8px}
+.fs-lab{display:block;font-size:11px;color:#b9c6ee;margin-bottom:7px}
+.fs-row{display:flex;align-items:center;gap:7px}
+.fs-btn{flex:0 0 auto;min-width:34px;height:30px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.1);color:#fff;border-radius:8px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;line-height:1}
+.fs-btn.big{font-size:16px}
+.fs-btn:hover:not(:disabled){background:rgba(255,255,255,.22)}
+.fs-btn:disabled{opacity:.35;cursor:not-allowed}
+.fs-dots{display:flex;gap:5px;flex:1;justify-content:center;align-items:center}
+.fs-dot{width:9px;height:9px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.45);background:transparent;cursor:pointer}
+.fs-dot.on{background:#fff;border-color:#fff;transform:scale(1.25)}
+.fs-cur{display:block;text-align:center;font-size:11px;color:#b9c6ee;margin-top:6px}
+
+/* ===== หัวตารางค้างเมื่อเลื่อน (ตารางยาว ๆ อ่านง่ายขึ้น) ===== */
+.card table thead th,.imp-box table thead th{position:sticky;top:0;z-index:2;background:var(--card,#fff)}
+html[data-theme="dark"] .card table thead th{background:#fff}
+.imp table thead th{background:var(--ic)}
+
+/* ===== ปุ่มกลับขึ้นบนสุด ===== */
+.totop{position:fixed;right:20px;bottom:20px;width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--blue);color:#fff;font-size:17px;cursor:pointer;box-shadow:0 6px 18px rgba(31,58,147,.28);display:grid;place-items:center;z-index:50;transition:opacity .18s,transform .18s}
+.totop:hover{transform:translateY(-3px)}
+@media print{.side,.totop,.theme-toggle,.fontsize{display:none!important}.main{zoom:1!important}}
+
 /* ===== ปุ่มสลับธีมในแถบเมนู ===== */
-.theme-toggle{margin-top:auto;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#dbe4ff;border-radius:9px;padding:9px 12px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+.theme-toggle{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#dbe4ff;border-radius:9px;padding:9px 12px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
 .theme-toggle:hover{background:rgba(255,255,255,.16)}
 
 /* ===== โหมดมืด (สลับเนื้อหาเป็นสีเข้ม แถบเมนูคงสีกรมท่าแบรนด์) ===== */
@@ -80,7 +120,8 @@ html[data-theme="dark"] .main .tag{filter:invert(1) hue-rotate(180deg)}
 .imp-note{font-size:12px;color:var(--im);line-height:1.75}
 
 /* --- ช่องลากไฟล์มาวาง --- */
-.imp-drop{border:2px dashed var(--il);border-radius:14px;padding:46px 20px;text-align:center;cursor:pointer;transition:.18s;background:var(--is)}
+/* ต้องเป็น block — label เป็น inline โดยปริยาย ทำให้เส้นประขอบแตกเป็นชิ้นและกล่องยืดผิด */
+.imp-drop{display:block;width:100%;border:2px dashed var(--il);border-radius:14px;padding:46px 20px;text-align:center;cursor:pointer;transition:.18s;background:var(--is)}
 .imp-drop:hover{border-color:var(--ia)}
 .imp-drop.over{border-color:var(--ia);background:rgba(46,108,240,.1)}
 .imp-drop .ic{font-size:38px;line-height:1}
