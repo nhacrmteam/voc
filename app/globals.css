@@ -1,4 +1,4 @@
-:root{--navy:#1f3a93;--blue:#2e6cf0;--green:#16a34a;--red:#dc2626;--amber:#f59e0b;--muted:#64748b;--line:#e2e8f0;--bg:#eef2f8;--ink:#0f172a}
+:root{--navy:#1f3a93;--blue:#2e6cf0;--green:#16a34a;--red:#dc2626;--amber:#f59e0b;--muted:#556274;--line:#e2e8f0;--bg:#eef2f8;--ink:#0f172a}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Sarabun',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
 a{color:inherit;text-decoration:none}
@@ -7,7 +7,7 @@ a{color:inherit;text-decoration:none}
 .brand{display:flex;align-items:center;gap:11px;font-weight:700;font-size:16px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.15);margin-bottom:12px}
 .brand-logo{flex:0 0 auto;width:40px;height:40px;background:#fff;border-radius:10px;padding:5px;object-fit:contain;box-shadow:0 2px 8px rgba(0,0,0,.18)}
 .brand-text{line-height:1.25}
-.brand-text span{display:block;font-size:11px;opacity:.8;font-weight:400}
+.brand-text span{display:block;font-size:12px;opacity:.9;font-weight:400}
 .nav a{display:block;padding:10px 12px;border-radius:9px;color:#dbe4ff;font-weight:500;margin-bottom:3px}
 .nav a:hover{background:rgba(255,255,255,.1)}
 .main{flex:1;min-width:0;display:flex;flex-direction:column}
@@ -23,16 +23,16 @@ a{color:inherit;text-decoration:none}
 .card h3{font-size:14px;margin-bottom:10px}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
-th{font-size:11.5px;color:var(--muted);text-transform:uppercase}
+th{font-size:12px;color:var(--muted);text-transform:uppercase}
 tbody tr:hover{background:#f8fafc}
-.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:600}
+.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:600}
 .p-pos{background:#dcfce7;color:#15803d}.p-neu{background:#f1f5f9;color:#475569}.p-neg{background:#fee2e2;color:#b91c1c}
 .p-hi{background:#fee2e2;color:#b91c1c}.p-md{background:#fef3c7;color:#b45309}.p-lo{background:#e0f2fe;color:#0369a1}
 input{font-family:inherit;font-size:14px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;width:100%}
 /* ช่องติ๊ก/ตัวเลือก ต้องไม่โดนกฎ width:100% ด้านบน ไม่งั้นจะยืดเต็มบรรทัด */
 input[type=checkbox],input[type=radio]{width:auto;padding:0;border:none;border-radius:0}
 input[type=file]{width:auto;padding:0;border:none}
-.tag{background:#eef2ff;color:var(--navy);border-radius:6px;padding:2px 8px;font-size:11px}
+.tag{background:#eef2ff;color:var(--navy);border-radius:6px;padding:2px 8px;font-size:12px}
 .pipe{display:flex;height:16px;border-radius:8px;overflow:hidden;border:1px solid var(--line);margin-bottom:10px}
 .btn{display:inline-block;background:var(--blue);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-family:inherit;font-size:13px;cursor:pointer}
 /* ============================================================
@@ -44,7 +44,7 @@ input[type=file]{width:auto;padding:0;border:none}
 .kcard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--kc,#2e6cf0)}
 .kcard .klab{font-size:12px;color:var(--muted);font-weight:500}
 .kcard .kval{font-size:30px;font-weight:700;line-height:1.15;margin:2px 0 3px;color:var(--kc,#1f3a93)}
-.kcard .kdelta{font-size:11.5px;font-weight:600;display:flex;align-items:center;gap:4px}
+.kcard .kdelta{font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px}
 .kcard .kdelta.up{color:#16a34a}.kcard .kdelta.down{color:#dc2626}.kcard .kdelta.flat{color:var(--muted)}
 .kcard .kspark{margin-top:7px}
 
@@ -56,15 +56,15 @@ input[type=file]{width:auto;padding:0;border:none}
 .sum-head span{font-weight:400;opacity:.7;font-size:12px}
 .sum-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;position:relative;z-index:1}
 .sum-item{padding-left:14px;border-left:2px solid rgba(255,255,255,.2)}
-.sum-item .l{font-size:11.5px;opacity:.8;margin-bottom:3px}
+.sum-item .l{font-size:12px;opacity:.9;margin-bottom:3px}
 .sum-item .v{font-size:29px;font-weight:700;line-height:1.1}
-.sum-item .s{font-size:11px;opacity:.65;margin-top:2px}
+.sum-item .s{font-size:12px;opacity:.82;margin-top:2px}
 
 /* เสียงลูกค้าตาม Customer Journey */
 .jr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .jr-card{background:var(--card,#fff);border:1px solid var(--line);border-radius:12px;padding:13px 14px;text-align:center;transition:transform .16s ease,border-color .16s ease}
 .jr-card:hover{transform:translateY(-3px);border-color:var(--jc)}
-.jr-card .en{font-size:11.5px;color:var(--muted)}
+.jr-card .en{font-size:12px;color:var(--muted)}
 .jr-card .n{font-size:26px;font-weight:700;line-height:1.2;margin:3px 0;color:var(--jc)}
 .jr-card .th{font-size:12.5px;font-weight:600;margin-bottom:9px}
 .jr-card .bar{height:6px;background:#eef2f7;border-radius:6px;overflow:hidden}
@@ -96,7 +96,7 @@ input[type=file]{width:auto;padding:0;border:none}
 @media(max-width:620px){
   .top5{grid-template-columns:1fr;gap:14px}
   .wl-bar{flex-basis:64px}
-  .wl-meta{min-width:96px;font-size:11.5px}
+  .wl-meta{min-width:96px;font-size:12px}
 }
 @media(max-width:560px){
   .kcard .kval{font-size:25px}
@@ -128,7 +128,7 @@ html[data-font="xl"] .main{zoom:1.32}
 }
 
 .fontsize{margin-top:auto;padding:10px 11px;border:1px solid rgba(255,255,255,.2);border-radius:9px;background:rgba(255,255,255,.06);margin-bottom:8px}
-.fs-lab{display:block;font-size:11px;color:#b9c6ee;margin-bottom:7px}
+.fs-lab{display:block;font-size:12px;color:#cfd9f5;margin-bottom:7px}
 .fs-row{display:flex;align-items:center;gap:7px}
 .fs-btn{flex:0 0 auto;min-width:34px;height:30px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.1);color:#fff;border-radius:8px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;line-height:1}
 .fs-btn.big{font-size:16px}
@@ -137,7 +137,7 @@ html[data-font="xl"] .main{zoom:1.32}
 .fs-dots{display:flex;gap:5px;flex:1;justify-content:center;align-items:center}
 .fs-dot{width:9px;height:9px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.45);background:transparent;cursor:pointer}
 .fs-dot.on{background:#fff;border-color:#fff;transform:scale(1.25)}
-.fs-cur{display:block;text-align:center;font-size:11px;color:#b9c6ee;margin-top:6px}
+.fs-cur{display:block;text-align:center;font-size:12px;color:#cfd9f5;margin-top:6px}
 
 /* ===== หัวตารางค้างเมื่อเลื่อน (ตารางยาว ๆ อ่านง่ายขึ้น) ===== */
 .card table thead th,.imp-box table thead th{position:sticky;top:0;z-index:2;background:var(--card,#fff)}
@@ -209,7 +209,7 @@ html[data-theme="dark"] .main .tag{filter:invert(1) hue-rotate(180deg)}
 .imp-stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
 .imp-chip{background:var(--is);border:1px solid var(--il);border-radius:12px;padding:10px 15px;min-width:112px}
 .imp-chip .n{font-size:20px;font-weight:700;line-height:1.25}
-.imp-chip .l{font-size:11px;color:var(--im)}
+.imp-chip .l{font-size:12px;color:var(--im)}
 
 /* --- ปุ่ม --- */
 .imp-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:22px;padding-top:16px;border-top:1px solid var(--il)}
@@ -226,20 +226,20 @@ html[data-theme="dark"] .main .tag{filter:invert(1) hue-rotate(180deg)}
 .imp-way.on{border-color:var(--ia);background:rgba(46,108,240,.06);box-shadow:0 0 0 3px rgba(46,108,240,.12)}
 .imp-way .ic{font-size:19px}
 .imp-way .nm{font-weight:700;font-size:13.5px;margin-top:6px}
-.imp-way .ds{font-size:11.5px;color:var(--im);margin-top:2px}
+.imp-way .ds{font-size:12px;color:var(--im);margin-top:2px}
 
 /* --- ตาราง/แถบข้อความในหน้านี้ --- */
 .imp table th,.imp table td{border-bottom:1px solid var(--il)}
 .imp table th{color:var(--im)}
 .imp tbody tr:hover{background:var(--is)}
 .imp-box{border:1px solid var(--il);border-radius:12px;overflow:auto}
-.imp .kind{display:inline-block;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.imp .kind{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap}
 .imp .k-text{background:#dbeafe;color:#1d4ed8}
 .imp .k-score{background:#fef3c7;color:#92400e}
 .imp .k-date{background:#dcfce7;color:#15803d}
 .imp .k-choice{background:#f1f5f9;color:#475569}
 .imp .k-number{background:#ede9fe;color:#6d28d9}
-.imp .k-empty{background:#f1f5f9;color:#94a3b8}
+.imp .k-empty{background:#f1f5f9;color:#5b6b80}
 .imp-alert{border-radius:12px;padding:11px 14px;font-size:12.5px;line-height:1.7;margin-top:14px}
 .imp-alert.ok{background:rgba(22,163,74,.1);color:#15803d}
 .imp-alert.bad{background:rgba(220,38,38,.1);color:#b91c1c}
@@ -297,4 +297,151 @@ html[data-theme="dark"] .main .imp .k-empty{background:#1e293b;color:#64748b}
   table{font-size:12px}
   th,td{padding:7px 6px}
   .nav a{font-size:13px;padding:8px 10px}
+}
+
+/* ============================================================
+   ก.ย. 2569 — สถานะกำลังโหลด / หน้าเปล่ามีคำแนะนำ / ตารางบนมือถือ / เรียงคอลัมน์
+   ============================================================ */
+
+/* ข้อความสำหรับโปรแกรมอ่านหน้าจอเท่านั้น (ไม่แสดงบนจอ แต่ไม่ถูก display:none) */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* ----- โครงร่างระหว่างรอข้อมูล (skeleton) -----
+   ใช้ใน loading.tsx ของแต่ละหน้า แทนหน้าว่างระหว่างที่ server component ดึงข้อมูล */
+.sk{position:relative;overflow:hidden;background:#e3eaf3;border-radius:8px}
+.sk::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.72),transparent);animation:sk-slide 1.3s infinite}
+@keyframes sk-slide{100%{transform:translateX(100%)}}
+/* เคารพการตั้งค่า "ลดการเคลื่อนไหว" ของระบบปฏิบัติการ */
+@media(prefers-reduced-motion:reduce){.sk::after{animation:none}}
+.sk-kpi{height:98px;border-radius:14px}
+
+/* ----- หน้าเปล่าที่มีคำแนะนำ (แทนข้อความ "ไม่พบรายการ") ----- */
+.empty{text-align:center;padding:34px 18px}
+.empty .ic{font-size:34px;line-height:1;margin-bottom:10px;opacity:.8}
+.empty .t{font-size:15px;font-weight:700;color:var(--ink);margin-bottom:5px}
+.empty .d{font-size:13px;line-height:1.85;color:var(--muted);max-width:470px;margin:0 auto}
+.empty .acts{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:15px}
+.empty .lnk{color:var(--blue);font-weight:600;text-decoration:underline}
+
+/* ----- คลิกหัวตารางเพื่อเรียงข้อมูล ----- */
+th.sortable{padding:0;white-space:nowrap}
+th.sortable>button{width:100%;display:flex;align-items:center;gap:4px;background:none;border:none;padding:9px 10px;font:inherit;font-size:12px;color:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer;text-align:left}
+th.sortable>button:hover{color:var(--ink)}
+th.sortable>button:focus-visible{outline:2px solid var(--blue);outline-offset:-2px;border-radius:6px}
+th.sortable .ar{opacity:.4;font-size:9px;line-height:1}
+th.sortable[aria-sort="ascending"],th.sortable[aria-sort="descending"]{color:var(--blue)}
+th.sortable[aria-sort="ascending"] .ar,th.sortable[aria-sort="descending"] .ar{opacity:1}
+
+/* ============================================================
+   มือถือ: ตาราง → การ์ด (ใส่ class "tcards" ที่ <table> และ data-label ที่ทุก <td>)
+   เดิมต้องเลื่อนซ้าย-ขวาอ่านตาราง 10 คอลัมน์บนจอ 5 นิ้ว
+   ============================================================ */
+@media(max-width:600px){
+  table.tcards,table.tcards tbody,table.tcards tr,table.tcards td{display:block;width:100%}
+  /* ซ่อนหัวตารางแบบยังอ่านได้ด้วยโปรแกรมอ่านหน้าจอ — ชื่อคอลัมน์ย้ายไปอยู่หน้าค่าแต่ละช่องแทน */
+  table.tcards thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  table.tcards tr{border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-bottom:10px;background:var(--card,#fff)}
+  table.tcards tr:hover{background:var(--card,#fff)}
+  table.tcards td{border:none;padding:5px 0;display:flex;gap:12px;align-items:flex-start;justify-content:space-between;font-size:13px}
+  table.tcards td+td{border-top:1px dashed var(--line)}
+  table.tcards td::before{content:attr(data-label);flex:0 0 38%;color:var(--muted);font-size:12px;font-weight:500}
+  table.tcards td[data-label=""]::before{display:none}
+  /* ช่องข้อความยาว: บนการ์ดให้ตัดบรรทัดได้ ไม่ต้องตัดท้ายด้วย … */
+  table.tcards td.cell-wrap{display:block;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;max-width:none!important}
+  table.tcards td.cell-wrap::before{display:block;margin-bottom:2px}
+  /* การ์ดไม่ต้องเลื่อนแนวนอนแล้ว */
+  .card:has(table.tcards){overflow-x:visible}
+}
+
+/* ============================================================
+   ป๊อปอัปรายละเอียดเสียงลูกค้า (VocModal)
+   วางไว้นอก .main โดยตั้งใจ — .main โดน filter:invert ในโหมดมืด
+   ถ้าซ้อนอยู่ข้างในจะโดน invert ซ้ำแล้วสีเพี้ยน จึงเขียนสีโหมดมืดตรง ๆ ข้างล่างแทน
+   ============================================================ */
+.vm-back{position:fixed;inset:0;z-index:100;background:rgba(15,23,42,.55);backdrop-filter:blur(2px);display:flex;align-items:flex-start;justify-content:center;padding:28px 18px;overflow-y:auto;animation:vm-fade .16s ease}
+.vm-panel{width:100%;max-width:940px;background:var(--bg);border-radius:16px;box-shadow:0 24px 60px rgba(15,23,42,.35);display:flex;flex-direction:column;max-height:calc(100vh - 56px);overflow:hidden;animation:vm-rise .18s cubic-bezier(.22,1,.36,1)}
+@keyframes vm-fade{from{opacity:0}}
+@keyframes vm-rise{from{opacity:0;transform:translateY(14px) scale(.985)}}
+@media(prefers-reduced-motion:reduce){.vm-back,.vm-panel{animation:none}}
+
+.vm-head{flex:0 0 auto;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:15px 20px;background:#fff;border-bottom:1px solid var(--line)}
+.vm-head h2{font-size:17px;line-height:1.35}
+.vm-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+.vm-acts{flex:0 0 auto;display:flex;align-items:center;gap:8px}
+.vm-full{font-size:12.5px;font-weight:600;color:var(--blue);border:1px solid var(--line);border-radius:8px;padding:6px 11px;white-space:nowrap}
+.vm-full:hover{border-color:var(--blue);background:#f5f8ff}
+.vm-x{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--muted);font-size:15px;cursor:pointer;line-height:1}
+.vm-x:hover{background:#fee2e2;border-color:#fca5a5;color:#b91c1c}
+.vm-full:focus-visible,.vm-x:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+/* เนื้อหาเลื่อนในกล่อง หัวเรื่องกับปุ่มปิดค้างอยู่เสมอ */
+.vm-body{flex:1 1 auto;overflow-y:auto;padding:16px 20px 20px}
+.vm-body .card:last-child{margin-bottom:0}
+
+@media(max-width:640px){
+  .vm-back{padding:0}
+  .vm-panel{max-width:none;border-radius:0;max-height:100vh;height:100vh}
+  .vm-body{padding:13px 12px 18px}
+  .vm-head{padding:12px 13px}
+  .vm-head h2{font-size:15.5px}
+}
+
+/* โหมดมืด — เขียนสีตรง ๆ เพราะป๊อปอัปอยู่นอก .main จึงไม่โดน invert */
+html[data-theme="dark"] .vm-back{background:rgba(2,6,16,.7)}
+html[data-theme="dark"] .vm-panel{background:#0d1524;color:#e8eef8}
+html[data-theme="dark"] .vm-head{background:#121c30;border-bottom-color:#27354f}
+html[data-theme="dark"] .vm-sub{color:#94a4be}
+html[data-theme="dark"] .vm-panel .card{background:#121c30;border-color:#27354f;color:#e8eef8}
+html[data-theme="dark"] .vm-panel th,html[data-theme="dark"] .vm-panel td{border-bottom-color:#27354f}
+html[data-theme="dark"] .vm-panel th{color:#94a4be}
+html[data-theme="dark"] .vm-panel tbody tr:hover{background:transparent}
+html[data-theme="dark"] .vm-x{background:#121c30;border-color:#27354f;color:#94a4be}
+html[data-theme="dark"] .vm-full{border-color:#27354f;color:#7ea6ff}
+html[data-theme="dark"] .vm-full:hover{background:#17203a}
+html[data-theme="dark"] .vm-panel .card table thead th{background:#121c30}
+
+/* ----- ช่องในตารางที่คลิกเปิดป๊อปอัปได้ ----- */
+/* รหัส VOC: ป้าย tag เดิม แต่เป็นปุ่มจริง (โฟกัสด้วยคีย์บอร์ดได้) */
+button.tag{border:1px solid #c7d2fe;background:#e9edff;font-family:inherit;cursor:pointer;font-weight:600;line-height:1.5;transition:background .14s,color .14s,border-color .14s}
+button.tag:hover{background:var(--blue);border-color:var(--blue);color:#fff}
+button.tag:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+/* เสียงลูกค้า: ทั้งช่องกดได้ ขีดเส้นใต้จาง ๆ บอกว่าคลิกได้ */
+.voice-open{display:block;width:100%;text-align:left;background:none;border:none;padding:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline;text-decoration-color:#c7d2fe;text-decoration-thickness:1px;text-underline-offset:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.voice-open:hover{color:var(--blue);text-decoration-color:currentColor}
+.voice-open:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px}
+tr:has(.voice-open):hover{background:#f5f8ff}
+@media(max-width:600px){
+  table.tcards td.cell-wrap .voice-open{white-space:normal;text-overflow:clip}
+}
+
+/* ----- ชิ้นส่วนในรายละเอียดเสียงลูกค้า (ใช้ทั้งหน้าเต็มและป๊อปอัป) ----- */
+.vd-quote{background:#f5f7ff;border:1px solid #c7d2fe;border-radius:10px;padding:13px;font-size:15px;line-height:1.6}
+.vd-score{font-size:34px;font-weight:700;line-height:1.1;color:#1f3a93}
+.vd-num{color:#1f3a93}
+.vd-pip{flex:1;height:8px;border-radius:3px;background:#eef2f7}
+.vd-pip.on{background:#1f3a93}
+.vd-warn{background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:12px 14px;font-size:13.5px;color:#92400e}
+.vd-rank{margin-left:8px;font-size:12px;color:#b45309;background:#fef3c7;border-radius:20px;padding:2px 9px}
+/* ในป๊อปอัปโหมดมืดต้องเขียนสีเข้มเอง (อยู่นอก .main จึงไม่โดน invert ช่วย) */
+html[data-theme="dark"] .vm-panel .vd-quote{background:#141f38;border-color:#2b3b63;color:#e8eef8}
+html[data-theme="dark"] .vm-panel .vd-score,html[data-theme="dark"] .vm-panel .vd-num{color:#8fb2ff}
+html[data-theme="dark"] .vm-panel .vd-pip{background:#1e293b}
+html[data-theme="dark"] .vm-panel .vd-pip.on{background:#5b8cff}
+html[data-theme="dark"] .vm-panel .vd-warn{background:rgba(251,191,36,.14);border-color:#7a5a12;color:#fcd34d}
+html[data-theme="dark"] .vm-panel .vd-rank{background:rgba(251,191,36,.14);color:#fcd34d}
+html[data-theme="dark"] .vm-panel .p-pos{background:#13352a;color:#5ee08b}
+html[data-theme="dark"] .vm-panel .p-neu{background:#1e293b;color:#a3b3cc}
+html[data-theme="dark"] .vm-panel .p-neg{background:#3d1a1a;color:#fca5a5}
+html[data-theme="dark"] .vm-panel .p-hi{background:#3d1a1a;color:#fca5a5}
+html[data-theme="dark"] .vm-panel .p-md{background:#3d2f10;color:#fcd34d}
+html[data-theme="dark"] .vm-panel .p-lo{background:#122c3d;color:#7dd3fc}
+html[data-theme="dark"] .vm-panel .btn{background:#2e6cf0}
+
+/* ตารางรายละเอียด VOC — th เป็น "ป้ายหัวแถว" ไม่ใช่หัวตาราง จึงไม่ใช้ .tcards */
+.vd-table th{width:1%;white-space:nowrap;vertical-align:top;text-transform:none;font-weight:600}
+@media(max-width:600px){
+  .vd-table,.vd-table tbody,.vd-table tr,.vd-table th,.vd-table td{display:block;width:auto}
+  .vd-table tr{padding:8px 0;border-bottom:1px solid var(--line)}
+  .vd-table tr:last-child{border-bottom:none}
+  .vd-table th{border:none;padding:6px 0 0;font-size:12px;color:var(--muted)}
+  .vd-table td{border:none;padding:0 0 2px}
 }
