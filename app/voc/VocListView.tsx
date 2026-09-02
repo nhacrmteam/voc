@@ -113,7 +113,12 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
     return m;
   }, [fr]);
 
-  const openRow = openId ? rows.find(x => x.id === openId) || null : null;
+  // เปิดรายการอื่นจากในป๊อปอัป — เลื่อนหน้าตารางตามไปด้วย ปิดแล้วจะได้เห็นแถวที่เพิ่งอ่านอยู่บนจอ
+  function openAt(id: string) {
+    setOpenId(id);
+    const i = sorted.findIndex(x => x.id === id);
+    if (i >= 0) setPage(Math.floor(i / PER) + 1);
+  }
 
   function clearAll() {
     const c = currentFYQuarter(); setBeYear(c.be); setQuarter(c.q);
@@ -272,7 +277,7 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
         </div>
       </div>
 
-      <VocModal r={openRow} rows={rows} onClose={() => setOpenId(null)} />
+      <VocModal id={openId} list={sorted} rows={rows} onChange={openAt} onClose={() => setOpenId(null)} />
     </>
   );
 }
