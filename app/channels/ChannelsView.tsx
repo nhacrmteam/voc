@@ -422,7 +422,7 @@ function ChannelDetail({ rows, allRows, scores, name, onBack }: { rows: Voc[]; a
         </>
       )}
 
-      <VocModal r={openId ? allRows.find(x => x.id === openId) || null : null} rows={allRows} onClose={() => setOpenId(null)} />
+      <VocModal id={openId} list={view.slice(0, 20)} rows={allRows} onChange={setOpenId} onClose={() => setOpenId(null)} />
     </div>
   );
 }
