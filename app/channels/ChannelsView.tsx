@@ -8,6 +8,8 @@ import { CHANNELS, PROJECT_TYPES, JOURNEY_TH, JOURNEY_COLOR, journeyLabel } from
 import { scoreTopics, scoreBand, type TopicScore } from '../../lib/priority';
 import { computeCloud } from '../../lib/cloud';
 import WordCloud from '../components/WordCloud';
+import EmptyState from '../components/EmptyState';
+import VocModal from '../voc/VocModal';
 import TrendChart from '../components/TrendChart';
 
 const QUARTERS: { k: string; label: string }[] = [
@@ -191,12 +193,12 @@ export default function ChannelsView({ rows }: { rows: Voc[] }) {
                         <div style={{ flex: 1, background: '#16a34a' }} />
                       </div>
                       <div style={{ fontSize: 17, marginTop: 6 }}>{ICON[c.name]}</div>
-                      <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>{i + 1}</div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>{i + 1}</div>
                     </div>
                   );
                 })}
               </div>
-              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 10, textAlign: 'center' }}>🟢 บวก · 🟡 กลาง · 🔴 ลบ — คลิกแท่งเพื่อดูรายละเอียดช่องทาง (เลข 1–8 ตรงกับการ์ดด้านล่าง)</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, textAlign: 'center' }}>🟢 บวก · 🟡 กลาง · 🔴 ลบ — คลิกแท่งเพื่อดูรายละเอียดช่องทาง (เลข 1–8 ตรงกับการ์ดด้านล่าง)</div>
             </div>
           </div>
         )}
@@ -213,7 +215,7 @@ export default function ChannelsView({ rows }: { rows: Voc[] }) {
                 <span style={{ fontSize: 18, flex: '0 0 auto' }}>{ICON[c.name]}</span>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{i + 1}. {c.name}</span>
               </h3>
-              <div style={{ fontSize: 24, fontWeight: 700, color: '#1f3a93' }}>{c.count.toLocaleString()}<span style={{ fontSize: 12, color: '#64748b', fontWeight: 400 }}> รายการ</span></div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#1f3a93' }}>{c.count.toLocaleString()}<span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 400 }}> รายการ</span></div>
               <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 12 }}>
                 <span>เชิงบวก <b style={{ color: '#16a34a' }}>{c.posPct}%</b></span>
                 <span>กลาง <b style={{ color: '#f59e0b' }}>{c.neuPct}%</b></span>
@@ -224,16 +226,17 @@ export default function ChannelsView({ rows }: { rows: Voc[] }) {
         </div>
 
         {/* ===== รายละเอียดเฉพาะช่องทาง (แสดงด้านล่างเมื่อเลือก) ===== */}
-        {sel && <ChannelDetail key={sel} rows={fr.filter(r => r.channel === sel)} scores={scores} name={sel} onBack={() => setSel(null)} />}
+        {sel && <ChannelDetail key={sel} rows={fr.filter(r => r.channel === sel)} allRows={rows} scores={scores} name={sel} onBack={() => setSel(null)} />}
       </div>
     </>
   );
 }
 
-function ChannelDetail({ rows, scores, name, onBack }: { rows: Voc[]; scores: Map<string, TopicScore>; name: string; onBack: () => void }) {
+function ChannelDetail({ rows, allRows, scores, name, onBack }: { rows: Voc[]; allRows: Voc[]; scores: Map<string, TopicScore>; name: string; onBack: () => void }) {
   // แหล่งที่มาในช่องทาง (เช่น Social → Facebook / Line OA)
   const allSources = Array.from(new Set(rows.map(r => r.source).filter(Boolean))) as string[];
   const [source, setSource] = useState('all');
+  const [openId, setOpenId] = useState<string | null>(null);   // รายการที่เปิดป๊อปอัปอยู่
   const view = source === 'all' ? rows : rows.filter(r => r.source === source);
   const total = view.length || 1;
 
@@ -284,13 +287,19 @@ function ChannelDetail({ rows, scores, name, onBack }: { rows: Voc[]; scores: Ma
         </div>
       )}
 
-      {view.length === 0 ? <div className="card">ยังไม่มีข้อมูลในแหล่งนี้</div> : (
+      {view.length === 0 ? (
+        <div className="card">
+          <EmptyState icon="🗂️" title="ยังไม่มีข้อมูลในแหล่งนี้"
+            detail={<>ช่วงเวลา/ตัวกรองที่เลือกอยู่ไม่มีเสียงลูกค้าจากแหล่งนี้ ลองเลือกแหล่งอื่น กลับไปดู &ldquo;ทั้งหมด&rdquo; หรือขยายช่วงเวลาด้านบน</>}
+            actions={<button className="btn" style={{ background: 'var(--muted)' }} onClick={onBack}>ดูทุกช่องทาง</button>} />
+        </div>
+      ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 12, marginBottom: 16 }}>
-            <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: '#64748b' }}>จำนวนรายการ{source !== 'all' ? ` (${source})` : ''}</div><div style={{ fontSize: 26, fontWeight: 700, color: '#1f3a93' }}>{view.length.toLocaleString()}</div></div>
-            <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: '#64748b' }}>% เสียงเชิงบวก</div><div style={{ fontSize: 26, fontWeight: 700, color: '#16a34a' }}>{posPct}%</div></div>
-            <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: '#64748b' }}>% เสียงเชิงลบ</div><div style={{ fontSize: 26, fontWeight: 700, color: '#dc2626' }}>{negPct}%</div></div>
-            <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: '#64748b' }}>เร่งด่วนสูง (High)</div><div style={{ fontSize: 26, fontWeight: 700, color: '#f59e0b' }}>{high}</div></div>
+            <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: 'var(--muted)' }}>จำนวนรายการ{source !== 'all' ? ` (${source})` : ''}</div><div style={{ fontSize: 26, fontWeight: 700, color: '#1f3a93' }}>{view.length.toLocaleString()}</div></div>
+            <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: 'var(--muted)' }}>% เสียงเชิงบวก</div><div style={{ fontSize: 26, fontWeight: 700, color: '#16a34a' }}>{posPct}%</div></div>
+            <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: 'var(--muted)' }}>% เสียงเชิงลบ</div><div style={{ fontSize: 26, fontWeight: 700, color: '#dc2626' }}>{negPct}%</div></div>
+            <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: 'var(--muted)' }}>เร่งด่วนสูง (High)</div><div style={{ fontSize: 26, fontWeight: 700, color: '#f59e0b' }}>{high}</div></div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16, marginBottom: 16 }}>
@@ -326,7 +335,9 @@ function ChannelDetail({ rows, scores, name, onBack }: { rows: Voc[]; scores: Ma
             <div className="card">
               <h3>🌟 จุดแข็งที่ลูกค้าชื่นชมในช่องทางนี้</h3>
               {strongTopics.length === 0 ? (
-                <div style={{ fontSize: 13, color: 'var(--muted)' }}>ยังไม่มีเสียงเชิงบวกในช่องทาง/แหล่งนี้</div>
+                <div style={{ fontSize: 13, color: 'var(--muted)', padding: '10px 0', lineHeight: 1.8 }}>
+                  ยังไม่มีเสียงเชิงบวกในช่องทาง/แหล่งนี้ — เมื่อมีคำชมเข้ามา ประเด็นที่ลูกค้าพูดถึงบ่อยที่สุดจะขึ้นที่นี่พร้อมสัดส่วนเสียงบวก
+                </div>
               ) : strongTopics.map(([k, o]) => (
                 <div key={k} style={{ margin: '9px 0' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13, marginBottom: 3 }}>
@@ -378,21 +389,28 @@ function ChannelDetail({ rows, scores, name, onBack }: { rows: Voc[]; scores: Ma
 
           <div className="card">
             <h3>รายการ VOC ของช่องทางนี้{source !== 'all' ? ` · ${source}` : ''}</h3>
-            <table>
+            <table className="tcards">
               <thead><tr><th>รหัส</th><th>แหล่ง</th><th>ประเด็น / เสียงลูกค้า</th><th>เส้นทางลูกค้า</th><th>Sentiment</th><th>ระดับเฝ้าระวัง</th></tr></thead>
               <tbody>{view.slice(0, 20).map(r => {
                 const sc = scores.get(r.topic);
                 const band = sc ? scoreBand(sc.score) : null;
                 return (
                   <tr key={r.id}>
-                    <td style={{ whiteSpace: 'nowrap' }}><Link href={'/voc/' + r.id} className="tag">{r.ref}</Link></td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{r.source}</td>
-                    <td><b>{r.topic}</b><div style={{ color: 'var(--muted)' }}>{r.voice}</div></td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{r.journey
+                    <td data-label="รหัส" style={{ whiteSpace: 'nowrap' }}>
+                      <button type="button" className="tag" onClick={() => setOpenId(r.id)} title={'ดูรายละเอียด ' + r.ref}>{r.ref}</button>
+                    </td>
+                    <td data-label="แหล่ง" style={{ whiteSpace: 'nowrap' }}>{r.source}</td>
+                    <td className="cell-wrap" data-label="ประเด็น / เสียงลูกค้า">
+                      <button type="button" className="voice-open" style={{ whiteSpace: 'normal' }}
+                        onClick={() => setOpenId(r.id)} title="คลิกเพื่อดูรายละเอียดและคะแนน">
+                        <b>{r.topic}</b><span style={{ display: 'block', color: 'var(--muted)' }}>{r.voice}</span>
+                      </button>
+                    </td>
+                    <td data-label="เส้นทางลูกค้า" style={{ whiteSpace: 'nowrap' }}>{r.journey
                       ? <span className="pill" title={journeyLabel(r.journey)} style={{ background: (JOURNEY_COLOR[r.journey] || {}).bg, color: (JOURNEY_COLOR[r.journey] || {}).fg }}>{JOURNEY_TH[r.journey] || r.journey}</span>
                       : <span style={{ color: 'var(--muted)' }}>-</span>}</td>
-                    <td style={{ whiteSpace: 'nowrap', color: SENT_COLOR[r.sentiment], fontWeight: 600 }}>{SENT_TH[r.sentiment]}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{band
+                    <td data-label="Sentiment" style={{ whiteSpace: 'nowrap', color: SENT_COLOR[r.sentiment], fontWeight: 600 }}>{SENT_TH[r.sentiment]}</td>
+                    <td data-label="ระดับเฝ้าระวัง" style={{ whiteSpace: 'nowrap' }}>{band
                       ? <><span className={'pill ' + band.cls}>{band.label}</span>
                           <span style={{ color: 'var(--muted)', fontSize: 11.5, marginLeft: 6 }}>{sc!.score.toFixed(2)}</span></>
                       : <span style={{ color: 'var(--muted)' }}>-</span>}</td>
@@ -403,6 +421,8 @@ function ChannelDetail({ rows, scores, name, onBack }: { rows: Voc[]; scores: Ma
           </div>
         </>
       )}
+
+      <VocModal r={openId ? allRows.find(x => x.id === openId) || null : null} rows={allRows} onClose={() => setOpenId(null)} />
     </div>
   );
 }
