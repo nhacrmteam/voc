@@ -6,6 +6,9 @@ import type { Voc } from '../../lib/data';
 import { CHANNELS, PROJECT_TYPES, JOURNEYS, JOURNEY_TH, JOURNEY_COLOR, journeyLabel } from '../../lib/data';
 import { computeCloud } from '../../lib/cloud';
 import WordCloud from '../components/WordCloud';
+import EmptyState from '../components/EmptyState';
+import { useSort, SortTh } from '../components/SortTh';
+import VocModal from './VocModal';
 
 const QUARTERS: { k: string; label: string }[] = [
   { k: 'year', label: 'ทั้งปี (สะสม)' },
@@ -26,6 +29,23 @@ function periodRange(be: number, q: string): { from: string; to: string } {
   };
   const [from, to] = m[q] || m.year; return { from, to };
 }
+// ค่าที่ใช้เรียงของแต่ละคอลัมน์ — ระดับความรุนแรง/อารมณ์เรียงตามความหมาย ไม่ใช่ตามตัวอักษร
+const SENT_ORDER: Record<string, number> = { Negative: 0, Neutral: 1, Positive: 2 };
+const PRIO_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+const SORTERS: Record<string, (r: Voc) => string | number> = {
+  ref: r => r.ref,
+  channel: r => r.channel,
+  journey: r => JOURNEYS.indexOf(r.journey as (typeof JOURNEYS)[number]),
+  projectType: r => r.projectType,
+  project: r => r.project || '',
+  topic: r => r.topic || '',
+  voice: r => r.voice || '',
+  sentiment: r => SENT_ORDER[r.sentiment] ?? 9,
+  priority: r => PRIO_ORDER[r.priority] ?? 9,
+  owner: r => r.owner || '',
+  occurredAt: r => r.occurredAt,
+};
+
 const sel: React.CSSProperties = { padding: '8px 11px', border: '1px solid var(--line)', borderRadius: 9, fontSize: 13, fontFamily: 'inherit', background: 'var(--card,#fff)', color: 'inherit' };
 
 export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ: string }) {
@@ -38,6 +58,7 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
   const [journey, setJourney] = useState('all');
   const [q, setQ] = useState(initialQ);
   const [page, setPage] = useState(1);
+  const [openId, setOpenId] = useState<string | null>(null);   // รายการที่เปิดป๊อปอัปอยู่
   const PER = 20;   // แถวต่อหน้า — อ่านง่าย ไม่ต้องเลื่อนยาว และรองรับข้อมูลหลักพัน
   useEffect(() => { const c = currentFYQuarter(); setMaxFY(c.be); setBeYear(c.be); setQuarter(c.q); }, []);
   const YEARS = [maxFY, maxFY - 1, maxFY - 2];
@@ -70,10 +91,13 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
     journey === 'all' ? frBase : frBase.filter(r => r.journey === journey),
     [frBase, journey]);
 
-  // เปลี่ยนตัวกรอง/คำค้น → กลับไปหน้าแรกเสมอ ไม่งั้นจะค้างอยู่หน้าที่ไม่มีข้อมูล
-  useEffect(() => { setPage(1); }, [beYear, quarter, ptype, projQ, channel, journey, qq]);
+  // เรียงตามคอลัมน์ที่ผู้ใช้คลิก (ยังไม่เลือก = ลำดับเดิมจากฐานข้อมูล)
+  const { sort, toggle, sorted } = useSort(fr, SORTERS);
+
+  // เปลี่ยนตัวกรอง/คำค้น/การเรียง → กลับไปหน้าแรกเสมอ ไม่งั้นจะค้างอยู่หน้าที่ไม่มีข้อมูล
+  useEffect(() => { setPage(1); }, [beYear, quarter, ptype, projQ, channel, journey, qq, sort]);
   const pageCount = Math.max(1, Math.ceil(fr.length / PER));
-  const pageRows = fr.slice((page - 1) * PER, page * PER);
+  const pageRows = sorted.slice((page - 1) * PER, page * PER);
 
   // จำนวนจริงต่อขั้น ตามตัวกรองที่เลือกอยู่ (ไม่นับตัวกรองขั้นเอง)
   const jrCount = useMemo(() => {
@@ -88,6 +112,8 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
     fr.forEach(r => { if (r.topic) m[r.topic] = (m[r.topic] || 0) + 1; });
     return m;
   }, [fr]);
+
+  const openRow = openId ? rows.find(x => x.id === openId) || null : null;
 
   function clearAll() {
     const c = currentFYQuarter(); setBeYear(c.be); setQuarter(c.q);
@@ -171,28 +197,51 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
               );
             })}
           </div>
-          <table>
-            <thead><tr><th>รหัส</th><th>ช่องทาง</th><th>เส้นทางลูกค้า</th><th>ประเภทโครงการ</th><th>โครงการ</th><th>หัวข้อ</th><th>เสียงลูกค้า</th><th>Sentiment</th><th>ความรุนแรง</th><th>ฝ่ายที่เกี่ยวข้อง</th></tr></thead>
+          <table className="tcards">
+            <thead><tr>
+              <SortTh sk="ref" sort={sort} toggle={toggle}>รหัส</SortTh>
+              <SortTh sk="channel" sort={sort} toggle={toggle}>ช่องทาง</SortTh>
+              <SortTh sk="journey" sort={sort} toggle={toggle}>เส้นทางลูกค้า</SortTh>
+              <SortTh sk="projectType" sort={sort} toggle={toggle}>ประเภทโครงการ</SortTh>
+              <SortTh sk="project" sort={sort} toggle={toggle}>โครงการ</SortTh>
+              <SortTh sk="topic" sort={sort} toggle={toggle}>หัวข้อ</SortTh>
+              <SortTh sk="voice" sort={sort} toggle={toggle}>เสียงลูกค้า</SortTh>
+              <SortTh sk="sentiment" sort={sort} toggle={toggle}>Sentiment</SortTh>
+              <SortTh sk="priority" sort={sort} toggle={toggle}>ความรุนแรง</SortTh>
+              <SortTh sk="owner" sort={sort} toggle={toggle}>ฝ่ายที่เกี่ยวข้อง</SortTh>
+            </tr></thead>
             <tbody>{pageRows.map(r => (
               <tr key={r.id}>
-                <td><Link href={'/voc/' + r.id} className="tag">{r.ref}</Link></td>
-                <td>{r.channel}</td>
-                <td>{r.journey
+                <td data-label="รหัส">
+                  <button type="button" className="tag" onClick={() => setOpenId(r.id)}
+                    title={'ดูรายละเอียด ' + r.ref}>{r.ref}</button>
+                </td>
+                <td data-label="ช่องทาง">{r.channel}</td>
+                <td data-label="เส้นทางลูกค้า">{r.journey
                   ? <span className="pill" title={journeyLabel(r.journey)}
                       style={{ background: (JOURNEY_COLOR[r.journey] || {}).bg || '#f1f5f9', color: (JOURNEY_COLOR[r.journey] || {}).fg || '#475569', whiteSpace: 'nowrap' }}>
                       {JOURNEY_TH[r.journey] || r.journey}
                     </span>
                   : <span style={{ color: 'var(--muted)', fontSize: 12 }}>-</span>}</td>
-                <td>{r.projectType}</td><td>{r.project}</td>
-                <td>{r.topic}{topicCount[r.topic] >= 3 && <span title={`ประเด็นซ้ำ ${topicCount[r.topic]} ครั้ง`} style={{ marginLeft: 6, fontSize: 11, color: '#b45309', background: '#fef3c7', borderRadius: 20, padding: '1px 7px' }}>🔁 ซ้ำ {topicCount[r.topic]}</span>}</td>
-                <td style={{ maxWidth: 240, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.voice}>{r.voice}</td>
-                <td><span className={'pill ' + (r.sentiment === 'Positive' ? 'p-pos' : r.sentiment === 'Negative' ? 'p-neg' : 'p-neu')}>{r.sentiment}</span></td>
-                <td><span className={'pill ' + (r.priority === 'High' ? 'p-hi' : r.priority === 'Medium' ? 'p-md' : 'p-lo')}>{r.priority}</span></td>
-                <td>{r.owner}</td>
+                <td data-label="ประเภทโครงการ">{r.projectType}</td><td data-label="โครงการ">{r.project}</td>
+                <td data-label="หัวข้อ">{r.topic}{topicCount[r.topic] >= 3 && <span title={`ประเด็นซ้ำ ${topicCount[r.topic]} ครั้ง`} style={{ marginLeft: 6, fontSize: 12, color: '#b45309', background: '#fef3c7', borderRadius: 20, padding: '1px 7px' }}>🔁 ซ้ำ {topicCount[r.topic]}</span>}</td>
+                <td className="cell-wrap" data-label="เสียงลูกค้า" style={{ maxWidth: 240, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <button type="button" className="voice-open" onClick={() => setOpenId(r.id)}
+                    title={r.voice + '\n(คลิกเพื่อดูรายละเอียดและคะแนน)'}>{r.voice}</button>
+                </td>
+                <td data-label="Sentiment"><span className={'pill ' + (r.sentiment === 'Positive' ? 'p-pos' : r.sentiment === 'Negative' ? 'p-neg' : 'p-neu')}>{r.sentiment}</span></td>
+                <td data-label="ความรุนแรง"><span className={'pill ' + (r.priority === 'High' ? 'p-hi' : r.priority === 'Medium' ? 'p-md' : 'p-lo')}>{r.priority}</span></td>
+                <td data-label="ฝ่ายที่เกี่ยวข้อง">{r.owner}</td>
               </tr>))}
             </tbody>
           </table>
-          {fr.length === 0 && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>ไม่พบรายการตามตัวกรองนี้</div>}
+          {fr.length === 0 && (rows.length === 0
+            ? <EmptyState icon="📥" title="ยังไม่มีเสียงลูกค้าในระบบ"
+                detail={<>เริ่มจากนำเข้าข้อมูลจากช่องทางใดช่องทางหนึ่ง หรือเปิดรับข้อมูลเรียลไทม์ผ่าน API<br />เมื่อมีข้อมูลแล้ว หน้านี้จะแสดงรายการทั้งหมดพร้อมตัวกรองและ Word Cloud</>}
+                actions={<Link className="btn" href="/import">นำเข้าข้อมูล</Link>} />
+            : <EmptyState title="ไม่พบรายการตามตัวกรองนี้"
+                detail={<>ลองขยายช่วงเวลา (เลือก &ldquo;ทั้งหมด (ตั้งแต่มีระบบ)&rdquo;) เลือกช่องทาง/ประเภทโครงการให้กว้างขึ้น หรือลดคำค้นให้สั้นลง</>}
+                actions={<button className="btn" onClick={clearAll}>ล้างตัวกรองทั้งหมด</button>} />)}
 
           {/* แบ่งหน้า */}
           {pageCount > 1 && (
@@ -222,6 +271,8 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
           )}
         </div>
       </div>
+
+      <VocModal r={openRow} rows={rows} onClose={() => setOpenId(null)} />
     </>
   );
 }
