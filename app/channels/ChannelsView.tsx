@@ -10,6 +10,7 @@ import { computeCloud } from '../../lib/cloud';
 import WordCloud from '../components/WordCloud';
 import EmptyState from '../components/EmptyState';
 import VocModal from '../voc/VocModal';
+import { ALL_TIME } from '../../lib/vocLink';
 import TrendChart from '../components/TrendChart';
 
 const QUARTERS: { k: string; label: string }[] = [
@@ -89,6 +90,8 @@ export default function ChannelsView({ rows }: { rows: Voc[] }) {
   const YEARS = [maxFY, maxFY - 1, maxFY - 2];
 
   const allTime = beYear === 0;
+  // ช่วงเวลาที่ตัวเลขบนหน้านี้ถูกคำนวณมา — ส่งไปกับลิงก์ Word Cloud ให้ปลายทางกรองช่วงเดียวกัน
+  const period = { fy: beYear, qt: quarter };
   const range = periodRange(beYear, quarter);
   const projQ = projText.trim().toLowerCase();
   // รายชื่อโครงการ (cascade ตามประเภท) สำหรับ datalist ค้นหา
@@ -226,13 +229,13 @@ export default function ChannelsView({ rows }: { rows: Voc[] }) {
         </div>
 
         {/* ===== รายละเอียดเฉพาะช่องทาง (แสดงด้านล่างเมื่อเลือก) ===== */}
-        {sel && <ChannelDetail key={sel} rows={fr.filter(r => r.channel === sel)} allRows={rows} scores={scores} name={sel} onBack={() => setSel(null)} />}
+        {sel && <ChannelDetail key={sel} rows={fr.filter(r => r.channel === sel)} allRows={rows} scores={scores} name={sel} period={period} onBack={() => setSel(null)} />}
       </div>
     </>
   );
 }
 
-function ChannelDetail({ rows, allRows, scores, name, onBack }: { rows: Voc[]; allRows: Voc[]; scores: Map<string, TopicScore>; name: string; onBack: () => void }) {
+function ChannelDetail({ rows, allRows, scores, name, period, onBack }: { rows: Voc[]; allRows: Voc[]; scores: Map<string, TopicScore>; name: string; period: { fy: number; qt: string }; onBack: () => void }) {
   // แหล่งที่มาในช่องทาง (เช่น Social → Facebook / Line OA)
   const allSources = Array.from(new Set(rows.map(r => r.source).filter(Boolean))) as string[];
   const [source, setSource] = useState('all');
@@ -384,7 +387,7 @@ function ChannelDetail({ rows, allRows, scores, name, onBack }: { rows: Voc[]; a
 
           <div className="card" style={{ marginTop: 16 }}>
             <h3>☁️ Word Cloud — คำที่พูดถึงมากในช่องทางนี้ (คลิกคำเพื่อค้นหา)</h3>
-            <div style={{ padding: '10px 4px' }}><WordCloud freq={cloud} basePath="/voc" /></div>
+            <div style={{ padding: '10px 4px' }}><WordCloud freq={cloud} basePath="/voc" period={period} /></div>
           </div>
 
           <div className="card">
@@ -422,7 +425,7 @@ function ChannelDetail({ rows, allRows, scores, name, onBack }: { rows: Voc[]; a
         </>
       )}
 
-      <VocModal id={openId} list={view.slice(0, 20)} rows={allRows} onChange={setOpenId} onClose={() => setOpenId(null)} />
+      <VocModal id={openId} list={view.slice(0, 20)} rows={allRows} period={ALL_TIME} onChange={setOpenId} onClose={() => setOpenId(null)} />
     </div>
   );
 }

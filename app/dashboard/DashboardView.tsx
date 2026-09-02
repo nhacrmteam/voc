@@ -7,6 +7,7 @@ import type { Voc } from '../../lib/data';
 import { PROJECT_TYPES, CHANNELS, JOURNEYS, JOURNEY_TH, JOURNEY_COLOR } from '../../lib/data';
 import EmptyState from '../components/EmptyState';
 import VocModal from '../voc/VocModal';
+import { vocHref, ALL_TIME } from '../../lib/vocLink';
 
 // ปีงบประมาณ (พ.ศ.) — ปีงบ Y เริ่ม 1 ต.ค. ปี (Y-1)
 // คำนวณปีงบ+ไตรมาส "ปัจจุบัน" จากวันที่จริง (เลื่อนตามเวลาเอง)
@@ -263,6 +264,9 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
   const projOptions = ptype === 'all' ? projectNames : projectNames.filter(p => p.type === ptype);
 
   const allTime = beYear === 0;   // 0 = ทั้งหมด ตั้งแต่มีระบบ
+  // ช่วงเวลาที่ตัวเลขบนหน้านี้ถูกคำนวณมา — ลิงก์ไปหน้ารายการ VOC ต้องพาช่วงนี้ไปด้วย
+  // ไม่งั้นกดจากการ์ด "ทั้งปี (สะสม)" แล้วหน้าปลายทางจะเด้งกลับเป็นไตรมาสปัจจุบัน
+  const period = { fy: beYear, qt: quarter };
   const range = periodRange(beYear, quarter);
   const qLabel = QUARTERS.find(q => q.k === quarter)?.label || '';
   const pd = allTime
@@ -586,7 +590,7 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
                 <div key={t} className="wl-row">
                   <div className="wl-name">
                     <span style={{ color: 'var(--red)' }}>⚠</span>
-                    <Link href={'/voc?q=' + encodeURIComponent(t)} title={t}>{t}</Link>
+                    <Link href={vocHref(t, period)} title={t}>{t}</Link>
                   </div>
                   <div className="wl-bar" style={{ background: '#fee2e2' }}>
                     <i style={{ width: Math.round(o.neg / o.c * 100) + '%', background: '#dc2626' }} />
@@ -609,7 +613,7 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
                 <div key={t} className="wl-row">
                   <div className="wl-name">
                     <span style={{ color: 'var(--green)' }}>👍</span>
-                    <Link href={'/voc?q=' + encodeURIComponent(t)} title={t}>{t}</Link>
+                    <Link href={vocHref(t, period)} title={t}>{t}</Link>
                   </div>
                   <div className="wl-bar" style={{ background: '#dcfce7' }}>
                     <i style={{ width: Math.round(o.pos / o.c * 100) + '%', background: '#16a34a' }} />
@@ -638,7 +642,7 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
                 ? <div style={{ fontSize: 13, color: 'var(--muted)' }}>ยังไม่มีเสียงเชิงบวกที่ระบุโครงการ</div>
                 : <ol>{topPos.map(([p, o], i) => (
                   <li key={p}>
-                    <span>{i + 1}. <Link href={'/voc?q=' + encodeURIComponent(p)}>{p}</Link></span>
+                    <span>{i + 1}. <Link href={vocHref(p, period)}>{p}</Link></span>
                     <b style={{ color: 'var(--green)' }}>{o.pos} เสียง</b>
                   </li>
                 ))}</ol>}
@@ -649,7 +653,7 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
                 ? <div style={{ fontSize: 13, color: 'var(--muted)' }}>ยังไม่มีเสียงเชิงลบที่ระบุโครงการ</div>
                 : <ol>{topNeg.map(([p, o], i) => (
                   <li key={p}>
-                    <span>{i + 1}. <Link href={'/voc?q=' + encodeURIComponent(p)}>{p}</Link></span>
+                    <span>{i + 1}. <Link href={vocHref(p, period)}>{p}</Link></span>
                     <b style={{ color: 'var(--red)' }}>{o.neg} เสียง</b>
                   </li>
                 ))}</ol>}
@@ -693,7 +697,7 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
         </div>
       </div>
 
-      <VocModal id={openId} list={f.slice(0, 15)} rows={rows} onChange={setOpenId} onClose={() => setOpenId(null)} />
+      <VocModal id={openId} list={f.slice(0, 15)} rows={rows} period={ALL_TIME} onChange={setOpenId} onClose={() => setOpenId(null)} />
     </>
   );
 }

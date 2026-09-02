@@ -38,7 +38,7 @@ export default function NavMenu() {
         <Link key={it.href} href={it.href}>{it.label}</Link>
       ))}
       {role === 'executive' && (
-        <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,.55)', padding: '10px 14px' }}>👁️ โหมดผู้บริหาร — ดู + ส่งออกเท่านั้น</div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,.82)', padding: '10px 14px' }}>👁️ โหมดผู้บริหาร — ดู + ส่งออกเท่านั้น</div>
       )}
     </nav>
   );

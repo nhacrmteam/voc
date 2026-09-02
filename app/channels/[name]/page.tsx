@@ -3,6 +3,7 @@ import { listVOC, CHANNELS, JOURNEY_TH, JOURNEY_COLOR, journeyLabel } from '../.
 import { scoreTopics, scoreBand } from '../../../lib/priority';
 import { computeCloud } from '../../../lib/cloud';
 import WordCloud from '../../components/WordCloud';
+import { ALL_TIME } from '../../../lib/vocLink';
 import TrendChart from '../../components/TrendChart';
 
 export const dynamic = 'force-dynamic';
@@ -128,15 +129,15 @@ export default async function ChannelDetail({ params }: { params: { name: string
             {/* Word Cloud */}
             <div className="card" style={{ marginTop: 16 }}>
               <h3>☁️ Word Cloud — คำที่ลูกค้าพูดถึงมากในช่องทางนี้ (คลิกคำเพื่อค้นหา)</h3>
-              <WordCloud freq={cloud} basePath="/voc" />
+              <WordCloud freq={cloud} basePath="/voc" period={ALL_TIME} />
             </div>
 
             {/* Recent list */}
             <div className="card" style={{ marginTop: 16 }}>
               <h3>เสียงลูกค้าล่าสุดในช่องทางนี้</h3>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <table className="tcards" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
-                  <tr style={{ textAlign: 'left', color: '#64748b', borderBottom: '2px solid #eef2f7' }}>
+                  <tr style={{ textAlign: 'left', color: 'var(--muted)', borderBottom: '2px solid #eef2f7' }}>
                     <th style={{ padding: '8px 6px' }}>รหัส</th><th>แหล่ง</th><th>ประเด็น / เสียงลูกค้า</th><th>เส้นทางลูกค้า</th><th>Sentiment</th><th>ระดับเฝ้าระวัง</th>
                   </tr>
                 </thead>
@@ -146,17 +147,17 @@ export default async function ChannelDetail({ params }: { params: { name: string
                     const band = sc ? scoreBand(sc.score) : null;
                     return (
                     <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}><Link href={'/voc/' + r.id} style={{ color: '#2e6cf0' }}>{r.ref}</Link></td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{r.source}</td>
-                      <td><b>{r.topic}</b><div style={{ color: '#64748b' }}>{r.voice}</div></td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{r.journey
+                      <td data-label="รหัส" style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}><Link href={'/voc/' + r.id} style={{ color: '#2e6cf0' }}>{r.ref}</Link></td>
+                      <td data-label="แหล่ง" style={{ whiteSpace: 'nowrap' }}>{r.source}</td>
+                      <td className="cell-wrap" data-label="ประเด็น / เสียงลูกค้า"><b>{r.topic}</b><div style={{ color: 'var(--muted)' }}>{r.voice}</div></td>
+                      <td data-label="เส้นทางลูกค้า" style={{ whiteSpace: 'nowrap' }}>{r.journey
                         ? <span className="pill" title={journeyLabel(r.journey)} style={{ background: (JOURNEY_COLOR[r.journey] || {}).bg, color: (JOURNEY_COLOR[r.journey] || {}).fg }}>{JOURNEY_TH[r.journey] || r.journey}</span>
-                        : <span style={{ color: '#64748b' }}>-</span>}</td>
-                      <td style={{ whiteSpace: 'nowrap', color: SENT_COLOR[r.sentiment], fontWeight: 600 }}>{SENT_TH[r.sentiment]}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{band
+                        : <span style={{ color: 'var(--muted)' }}>-</span>}</td>
+                      <td data-label="Sentiment" style={{ whiteSpace: 'nowrap', color: SENT_COLOR[r.sentiment], fontWeight: 600 }}>{SENT_TH[r.sentiment]}</td>
+                      <td data-label="ระดับเฝ้าระวัง" style={{ whiteSpace: 'nowrap' }}>{band
                         ? <><span className={'pill ' + band.cls}>{band.label}</span>
-                            <span style={{ color: '#64748b', fontSize: 11.5, marginLeft: 6 }}>{sc!.score.toFixed(2)}</span></>
-                        : <span style={{ color: '#64748b' }}>-</span>}</td>
+                            <span style={{ color: 'var(--muted)', fontSize: 12, marginLeft: 6 }}>{sc!.score.toFixed(2)}</span></>
+                        : <span style={{ color: 'var(--muted)' }}>-</span>}</td>
                     </tr>
                     );
                   })}

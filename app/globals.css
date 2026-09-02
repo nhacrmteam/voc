@@ -479,3 +479,8 @@ html[data-theme="dark"] .vm-count{color:#94a4be}
 html[data-theme="dark"] .vm-foot{border-top-color:#27354f}
 html[data-theme="dark"] .vm-fbtn{background:#121c30;border-color:#27354f;color:#e8eef8}
 html[data-theme="dark"] .vm-fbtn span,html[data-theme="dark"] .vm-hint{color:#94a4be}
+
+/* คำใน Word Cloud — เป็นได้ทั้ง <a> และ <button> ให้หน้าตาเหมือนกัน */
+.wc-word{background:none;border:none;padding:0;font-family:inherit;cursor:pointer;line-height:1.15}
+.wc-word:hover{text-decoration:underline!important;text-underline-offset:4px}
+.wc-word:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:4px}

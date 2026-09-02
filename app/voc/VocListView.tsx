@@ -1,7 +1,7 @@
 'use client';
 // VocListView — รายการเสียงลูกค้า (VOC) พร้อมชุดฟิลเตอร์เดียวกับหน้าภาพรวม/8 ช่องทาง
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Voc } from '../../lib/data';
 import { CHANNELS, PROJECT_TYPES, JOURNEYS, JOURNEY_TH, JOURNEY_COLOR, journeyLabel } from '../../lib/data';
 import { computeCloud } from '../../lib/cloud';
@@ -9,6 +9,7 @@ import WordCloud from '../components/WordCloud';
 import EmptyState from '../components/EmptyState';
 import { useSort, SortTh } from '../components/SortTh';
 import VocModal from './VocModal';
+import { ALL_TIME } from '../../lib/vocLink';
 
 const QUARTERS: { k: string; label: string }[] = [
   { k: 'year', label: 'ทั้งปี (สะสม)' },
@@ -48,7 +49,9 @@ const SORTERS: Record<string, (r: Voc) => string | number> = {
 
 const sel: React.CSSProperties = { padding: '8px 11px', border: '1px solid var(--line)', borderRadius: 9, fontSize: 13, fontFamily: 'inherit', background: 'var(--card,#fff)', color: 'inherit' };
 
-export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ: string }) {
+export default function VocListView({ rows, initialQ, initialFy, initialQuarter }: {
+  rows: Voc[]; initialQ: string; initialFy?: string; initialQuarter?: string;
+}) {
   const [maxFY, setMaxFY] = useState(2569);
   const [beYear, setBeYear] = useState(2569);
   const [quarter, setQuarter] = useState('q3');
@@ -60,7 +63,15 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
   const [page, setPage] = useState(1);
   const [openId, setOpenId] = useState<string | null>(null);   // รายการที่เปิดป๊อปอัปอยู่
   const PER = 20;   // แถวต่อหน้า — อ่านง่าย ไม่ต้องเลื่อนยาว และรองรับข้อมูลหลักพัน
-  useEffect(() => { const c = currentFYQuarter(); setMaxFY(c.be); setBeYear(c.be); setQuarter(c.q); }, []);
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const c = currentFYQuarter();
+    setMaxFY(c.be);
+    // ลิงก์ที่พกช่วงเวลามาด้วย (?fy=&qt=) ให้ใช้ช่วงนั้น — ไม่งั้นค่อยตั้งเป็นไตรมาสปัจจุบัน
+    const fy = initialFy != null && initialFy !== '' ? Number(initialFy) : NaN;
+    setBeYear(Number.isFinite(fy) ? fy : c.be);
+    setQuarter(initialQuarter && QUARTERS.some(x => x.k === initialQuarter) ? initialQuarter : c.q);
+  }, [initialFy, initialQuarter]);
   const YEARS = [maxFY, maxFY - 1, maxFY - 2];
 
   const allTime = beYear === 0;
@@ -120,6 +131,14 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
     if (i >= 0) setPage(Math.floor(i / PER) + 1);
   }
 
+  // คลิกคำใน Word Cloud — ใส่คำลงช่องค้นหาตรง ๆ ไม่เปลี่ยนหน้า
+  // (เดิมลิงก์ไป /voc?q= ทำให้ component เริ่มใหม่ ตัวกรองช่วงเวลาที่ผู้ใช้ตั้งไว้จึงถูกรีเซ็ตเป็นไตรมาสปัจจุบัน)
+  function pickWord(w: string) {
+    setQ(w);
+    setPage(1);
+    listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   function clearAll() {
     const c = currentFYQuarter(); setBeYear(c.be); setQuarter(c.q);
     setPtype('all'); setProjText(''); setChannel('all'); setJourney('all'); setQ('');
@@ -166,10 +185,10 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
       <div className="content">
         <div className="card">
           <h3>☁️ Word Cloud — คำที่ลูกค้าพูดถึงมาก (คลิกคำเพื่อค้นหา)</h3>
-          <WordCloud freq={cloud} basePath="/voc" />
+          <WordCloud freq={cloud} basePath="/voc" onPick={pickWord} />
         </div>
 
-        <div className="card">
+        <div className="card" ref={listRef} style={{ scrollMarginTop: 12 }}>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
             <input style={{ ...sel, flex: '1 1 220px' }} value={q} onChange={e => setQ(e.target.value)}
               placeholder="🔎 ค้นหาข้อความ เช่น จอง, ซ่อม, สินเชื่อ..." />
@@ -277,7 +296,7 @@ export default function VocListView({ rows, initialQ }: { rows: Voc[]; initialQ:
         </div>
       </div>
 
-      <VocModal id={openId} list={sorted} rows={rows} onChange={openAt} onClose={() => setOpenId(null)} />
+      <VocModal id={openId} list={sorted} rows={rows} period={ALL_TIME} onChange={openAt} onClose={() => setOpenId(null)} />
     </>
   );
 }

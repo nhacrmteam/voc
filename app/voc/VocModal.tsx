@@ -9,10 +9,11 @@ import { createPortal } from 'react-dom';
 import type { Voc } from '../../lib/data';
 import VocDetailBody from './VocDetailBody';
 
-export default function VocModal({ id, list, rows, onChange, onClose }: {
+export default function VocModal({ id, list, rows, period, onChange, onClose }: {
   id: string | null;
   list: Voc[];        // ลำดับที่ผู้ใช้เห็นอยู่บนตาราง (กรอง+เรียงแล้ว) — ใช้กำหนดว่าอะไรคือ "ถัดไป"
   rows: Voc[];        // ข้อมูลชุดเต็มของระบบ — ใช้คิดคะแนน/ประเด็นซ้ำ (ห้ามส่งชุดที่กรองแล้ว)
+  period?: { fy?: number | string; qt?: string };   // ช่วงเวลาที่ลิงก์ในกล่องจะพาไป
   onChange: (id: string) => void;
   onClose: () => void;
 }) {
@@ -114,7 +115,7 @@ export default function VocModal({ id, list, rows, onChange, onClose }: {
           </div>
         </div>
         <div className="vm-body" ref={bodyRef}>
-          <VocDetailBody r={r} rows={rows} onNavigate={onClose} />
+          <VocDetailBody r={r} rows={rows} period={period} onNavigate={onClose} />
           {idx >= 0 && list.length > 1 && (
             <div className="vm-foot">
               <button type="button" className="vm-fbtn" onClick={() => go(prev)} disabled={!prev}>

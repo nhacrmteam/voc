@@ -3,7 +3,7 @@
 // 1) ผู้ใช้งานและบทบาท (เปลี่ยนบทบาทได้) 2) การเชื่อมต่อ 8 ช่องทาง 3) ตั้งค่า/ทดสอบ LLM 4) Data Mapping & Dictionary
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { DEPT_GROUPS } from '../../lib/data';
+import { DEPT_GROUPS, journeyLabel } from '../../lib/data';
 import { pingLLM, LlmPing } from '../../lib/ai';
 
 const ROLE_TH: Record<string, string> = { pending: 'รออนุมัติ', admin: 'แอดมิน', operator: 'ผู้ปฏิบัติงาน', executive: 'ผู้บริหาร' };
@@ -150,19 +150,19 @@ export default function AdminPage() {
         <div className="card">
           <h3>👥 ผู้ใช้งานและบทบาท {pendingCount > 0 && <span style={{ fontSize: 12.5, color: '#b45309', background: '#fef3c7', padding: '2px 9px', borderRadius: 20, marginLeft: 6 }}>⏳ รออนุมัติ {pendingCount}</span>}</h3>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>ผู้ใช้ใหม่สมัครผ่านหน้า &ldquo;สมัครใช้งาน&rdquo; และเริ่มต้นเป็น &ldquo;รออนุมัติ&rdquo; เสมอ — เลือกบทบาทให้ที่นี่เพื่อเปิดสิทธิ์เข้าใช้งาน</div>
-          <table>
+          <table className="tcards">
             <thead><tr><th>ผู้ใช้</th><th>อีเมล</th><th>หน่วยงาน</th><th>บทบาท</th><th>สิทธิ์</th></tr></thead>
             <tbody>{users.slice().sort((a, b) => (a.role === 'pending' ? -1 : 0) - (b.role === 'pending' ? -1 : 0)).map(u => (
               <tr key={u.id} style={u.role === 'pending' ? { background: '#fffbeb' } : undefined}>
-                <td>{u.full_name || '-'}{u.id === me ? ' (คุณ)' : ''}</td>
-                <td>{u.email || '-'}</td>
-                <td>{u.dept || '-'}</td>
-                <td>
+                <td data-label="ผู้ใช้">{u.full_name || '-'}{u.id === me ? ' (คุณ)' : ''}</td>
+                <td data-label="อีเมล">{u.email || '-'}</td>
+                <td data-label="หน่วยงาน">{u.dept || '-'}</td>
+                <td data-label="บทบาท">
                   <select style={sel} value={u.role} onChange={e => changeRole(u.id, e.target.value)}>
                     {Object.keys(ROLE_TH).map(r => <option key={r} value={r}>{ROLE_TH[r]}</option>)}
                   </select>
                 </td>
-                <td style={{ fontSize: 12 }}>{ROLE_RIGHT[u.role] || '-'}</td>
+                <td className="cell-wrap" data-label="สิทธิ์" style={{ fontSize: 12 }}>{ROLE_RIGHT[u.role] || '-'}</td>
               </tr>
             ))}</tbody>
           </table>
@@ -171,13 +171,13 @@ export default function AdminPage() {
         {/* การเชื่อมต่อช่องทาง */}
         <div className="card">
           <h3>🔗 การเชื่อมต่อช่องทาง (Data Sources)</h3>
-          <table>
+          <table className="tcards">
             <thead><tr><th>ช่องทาง</th><th>วิธีนำเข้า</th><th>จำนวนเรื่องในระบบ</th><th>สถานะ</th></tr></thead>
             <tbody>{CHANNELS.map(ch => (
               <tr key={ch.id}>
-                <td>{ch.name}</td><td style={{ fontSize: 12.5 }}>{ch.imp}</td>
-                <td>{role === 'mock' ? '—' : (counts[ch.id] ?? 0).toLocaleString()}</td>
-                <td><span className="pill p-pos">พร้อมใช้งาน</span></td>
+                <td data-label="ช่องทาง">{ch.name}</td><td className="cell-wrap" data-label="วิธีนำเข้า" style={{ fontSize: 12.5 }}>{ch.imp}</td>
+                <td data-label="จำนวนเรื่องในระบบ">{role === 'mock' ? '—' : (counts[ch.id] ?? 0).toLocaleString()}</td>
+                <td data-label="สถานะ"><span className="pill p-pos">พร้อมใช้งาน</span></td>
               </tr>
             ))}</tbody>
           </table>
@@ -197,7 +197,7 @@ export default function AdminPage() {
               const c = cfg[ch.id] || { id: ch.id, api_enabled: false, webhook_secret: '' };
               return (
                 <tr key={ch.id}>
-                  <td>{ch.name}<div style={{ fontSize: 11, color: 'var(--muted)' }}>channel_id: <code>{ch.id}</code></div></td>
+                  <td>{ch.name}<div style={{ fontSize: 12, color: 'var(--muted)' }}>channel_id: <code>{ch.id}</code></div></td>
                   <td>
                     <label style={{ cursor: 'pointer', fontSize: 12.5 }}>
                       <input type="checkbox" checked={c.api_enabled} onChange={e => setC(ch.id, { api_enabled: e.target.checked })} /> เปิด
@@ -246,7 +246,7 @@ export default function AdminPage() {
               Sentiment: <b>{llmPing.sample.sentiment}</b> ({llmPing.sample.confidence}%) ·
               ความรุนแรง: <b>{llmPing.sample.priority}</b> ·
               ฝ่าย: <b>{llmPing.sample.owner}</b><br />
-              หมวด: {llmPing.sample.catProduct} · Journey: {llmPing.sample.journey}<br />
+              หมวด: {llmPing.sample.catProduct} · เส้นทางลูกค้า: {journeyLabel(llmPing.sample.journey)}<br />
               เหตุผล: {llmPing.sample.reason}
             </div>
           )}

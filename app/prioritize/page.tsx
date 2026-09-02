@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import EmptyState from '../components/EmptyState';
+import { vocHref, ALL_TIME } from '../../lib/vocLink';
 import { listVOC } from '../../lib/data';
 import { W, SW, FACTORS, STRENGTH_FACTORS, scoreTopics, scoreBand, scoreStrengths, strengthBand } from '../../lib/priority';
 
@@ -25,7 +27,7 @@ export default async function Prioritize() {
                 <div style={{ height: 10, background: '#eef2f7', borderRadius: 6 }}>
                   <div style={{ width: f.w * 100 + '%', height: '100%', background: '#1f3a93', borderRadius: 6 }} />
                 </div>
-                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>{f.desc}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{f.desc}</div>
               </div>
             ))}
           </div>
@@ -34,17 +36,17 @@ export default async function Prioritize() {
         {/* Top 10 */}
         <div className="card">
           <h3>🎯 Top 10 ประเด็นที่ควรเฝ้าระวัง/จัดการก่อน</h3>
-          <table>
+          <table className="tcards">
             <thead><tr><th>อันดับ</th><th>ประเด็น</th><th>จำนวน</th><th>ความถี่</th><th>ความรุนแรง</th><th>แนวโน้ม</th><th>ผลกระทบ</th><th>คะแนนถ่วงน้ำหนัก</th><th>ระดับ</th></tr></thead>
             <tbody>{top10.map((x, i) => {
               const band = scoreBand(x.score);
               return (
                 <tr key={x.topic} style={i < 3 ? { background: '#fef9ec' } : undefined}>
-                  <td><b>{i + 1}</b></td>
-                  <td><Link href={'/voc?q=' + encodeURIComponent(x.topic)} style={{ color: '#0f172a' }}>{x.topic}</Link></td>
-                  <td>{x.count}</td><td>{x.fl}</td><td>{x.sl}</td><td>{x.tl}</td><td>{x.il}</td>
-                  <td><b>{x.score.toFixed(2)}</b></td>
-                  <td><span className={'pill ' + band.cls}>{band.label}</span></td>
+                  <td data-label="อันดับ"><b>{i + 1}</b></td>
+                  <td className="cell-wrap" data-label="ประเด็น"><Link href={vocHref(x.topic, ALL_TIME)} style={{ color: '#0f172a' }}>{x.topic}</Link></td>
+                  <td data-label="จำนวน">{x.count}</td><td data-label="ความถี่">{x.fl}</td><td data-label="ความรุนแรง">{x.sl}</td><td data-label="แนวโน้ม">{x.tl}</td><td data-label="ผลกระทบ">{x.il}</td>
+                  <td data-label="คะแนนถ่วงน้ำหนัก"><b>{x.score.toFixed(2)}</b></td>
+                  <td data-label="ระดับ"><span className={'pill ' + band.cls}>{band.label}</span></td>
                 </tr>
               );
             })}</tbody>
@@ -69,7 +71,7 @@ export default async function Prioritize() {
                 <div style={{ height: 10, background: '#eef2f7', borderRadius: 6 }}>
                   <div style={{ width: f.w * 100 + '%', height: '100%', background: '#16a34a', borderRadius: 6 }} />
                 </div>
-                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>{f.desc}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{f.desc}</div>
               </div>
             ))}
           </div>
@@ -82,22 +84,23 @@ export default async function Prioritize() {
             ระบบนี้ฟังเสียงลูกค้าทั้งสองด้าน — ตารางนี้บอกว่าอะไรทำได้ดีจนลูกค้าชม ควรรักษาไว้ ขยายไปโครงการอื่น และชื่นชมหน่วยงานที่รับผิดชอบ
           </div>
           {strengths.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--muted)' }}>ยังไม่พบประเด็นที่มีเสียงเชิงบวกในช่วงข้อมูลนี้</div>
+            <EmptyState icon="🌟" title="ยังไม่พบประเด็นที่มีเสียงเชิงบวกในช่วงข้อมูลนี้"
+              detail={<>เมื่อมีคำชมเข้ามา ระบบจะจัดอันดับให้ว่าเรื่องไหนควรขยายผลก่อน พร้อมระบุฝ่ายที่ควรได้รับคำชม</>} />
           ) : (
             <>
-              <table>
+              <table className="tcards">
                 <thead><tr><th>อันดับ</th><th>ประเด็น</th><th>เสียงบวก</th><th>ความถี่</th><th>ความเข้มบวก</th><th>แนวโน้ม</th><th>การบอกต่อ</th><th>คะแนนถ่วงน้ำหนัก</th><th>ระดับ</th><th>ฝ่ายที่ควรได้รับคำชม</th></tr></thead>
                 <tbody>{strengths.map((x, i) => {
                   const band = strengthBand(x.score);
                   return (
                     <tr key={x.topic} style={i < 3 ? { background: '#f0fdf4' } : undefined}>
-                      <td><b>{i + 1}</b></td>
-                      <td><Link href={'/voc?q=' + encodeURIComponent(x.topic)} style={{ color: '#0f172a' }}>{x.topic}</Link></td>
-                      <td><b style={{ color: '#15803d' }}>{x.posCount}</b> <span style={{ color: 'var(--muted)' }}>/ {x.count}</span></td>
-                      <td>{x.fl}</td><td>{x.pl}</td><td>{x.tl}</td><td>{x.al}</td>
-                      <td><b>{x.score.toFixed(2)}</b></td>
-                      <td><span className={'pill ' + band.cls}>{band.label}</span></td>
-                      <td style={{ fontSize: 12.5 }}>{x.owner || '-'}</td>
+                      <td data-label="อันดับ"><b>{i + 1}</b></td>
+                      <td className="cell-wrap" data-label="ประเด็น"><Link href={vocHref(x.topic, ALL_TIME)} style={{ color: '#0f172a' }}>{x.topic}</Link></td>
+                      <td data-label="เสียงบวก"><b style={{ color: '#15803d' }}>{x.posCount}</b> <span style={{ color: 'var(--muted)' }}>/ {x.count}</span></td>
+                      <td data-label="ความถี่">{x.fl}</td><td data-label="ความเข้มบวก">{x.pl}</td><td data-label="แนวโน้ม">{x.tl}</td><td data-label="การบอกต่อ">{x.al}</td>
+                      <td data-label="คะแนนถ่วงน้ำหนัก"><b>{x.score.toFixed(2)}</b></td>
+                      <td data-label="ระดับ"><span className={'pill ' + band.cls}>{band.label}</span></td>
+                      <td data-label="ฝ่ายที่ควรได้รับคำชม" style={{ fontSize: 12.5 }}>{x.owner || '-'}</td>
                     </tr>
                   );
                 })}</tbody>

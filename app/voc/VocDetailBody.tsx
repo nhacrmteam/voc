@@ -5,11 +5,15 @@ import Link from 'next/link';
 import type { Voc } from '../../lib/data';
 import { journeyLabel, JOURNEY_DESC } from '../../lib/data';
 import { scoreTopics, scoreBand, FACTORS, W } from '../../lib/priority';
+import { vocHref, ALL_TIME } from '../../lib/vocLink';
 
-export default function VocDetailBody({ r, rows, onNavigate }: {
+export default function VocDetailBody({ r, rows, onNavigate, period = ALL_TIME }: {
   r: Voc;
   rows: Voc[];                 // ข้อมูลทั้งหมด — ใช้คิดคะแนน/ประเด็นซ้ำ (ต้องเป็นชุดเต็ม ไม่ใช่ชุดที่กรองแล้ว)
   onNavigate?: () => void;     // ป๊อปอัปส่งมาเพื่อปิดตัวเองก่อนพาไปหน้าอื่น
+  // ตัวเลข "พบ N ครั้งในระบบ" นับจากข้อมูลทั้งหมด ลิงก์จึงต้องพา "ทั้งหมด" ไปด้วย
+  // ไม่งั้นกดแล้วหน้ารายการจะกรองเหลือไตรมาสปัจจุบัน แล้วเห็นไม่ครบ N
+  period?: { fy?: number | string; qt?: string };
 }) {
   const same = rows.filter(x => x.topic === r.topic);
   const sameNeg = same.filter(x => x.sentiment === 'Negative').length;
@@ -109,7 +113,7 @@ export default function VocDetailBody({ r, rows, onNavigate }: {
           <div style={{ fontSize: 13.5, color: 'var(--muted)' }}>ประเด็น &ldquo;{r.topic}&rdquo; พบ {same.length} ครั้งในระบบ — ยังไม่ถึงเกณฑ์ประเด็นซ้ำ (≥3)</div>
         )}
         <div style={{ marginTop: 10 }}>
-          <Link href={'/voc?q=' + encodeURIComponent(r.topic)} onClick={onNavigate} className="btn">ดูทุกเสียงในประเด็นนี้ →</Link>
+          <Link href={vocHref(r.topic, period)} onClick={onNavigate} className="btn">ดูทุกเสียงในประเด็นนี้ →</Link>
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>
           * ระบบนี้เป็นการรับฟังและเฝ้าระวังเสียงลูกค้า (monitoring) — การดำเนินการแก้ไขอยู่ที่หน่วยงานที่เกี่ยวข้อง

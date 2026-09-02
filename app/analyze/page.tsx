@@ -17,8 +17,8 @@ function BarList({ title, note, data, total, color }: { title: string; note?: st
   return (
     <div className="card">
       <h3>{title}</h3>
-      {note && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: -6, marginBottom: 8 }}>{note}</div>}
-      {data.length === 0 && <div style={{ color: '#94a3b8', fontSize: 13 }}>ยังไม่มีข้อมูล</div>}
+      {note && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -6, marginBottom: 8 }}>{note}</div>}
+      {data.length === 0 && <div style={{ color: 'var(--muted)', fontSize: 13 }}>ยังไม่มีข้อมูล</div>}
       {data.map(([k, v]) => (
         <div key={k} style={{ margin: '9px 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 3 }}>
@@ -55,10 +55,10 @@ export default async function Analyze() {
       <div className="content">
         {/* Sentiment summary */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 12, marginBottom: 16 }}>
-          <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: '#64748b' }}>เสียงลูกค้าทั้งหมด</div><div style={{ fontSize: 26, fontWeight: 700, color: '#1f3a93' }}>{s.total.toLocaleString()}</div></div>
-          <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: '#64748b' }}>% เสียงเชิงบวก</div><div style={{ fontSize: 26, fontWeight: 700, color: '#16a34a' }}>{s.posPct}%</div></div>
-          <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: '#64748b' }}>% เป็นกลาง</div><div style={{ fontSize: 26, fontWeight: 700, color: '#64748b' }}>{s.neuPct}%</div></div>
-          <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: '#64748b' }}>% เสียงเชิงลบ</div><div style={{ fontSize: 26, fontWeight: 700, color: '#dc2626' }}>{s.negPct}%</div></div>
+          <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: 'var(--muted)' }}>เสียงลูกค้าทั้งหมด</div><div style={{ fontSize: 26, fontWeight: 700, color: '#1f3a93' }}>{s.total.toLocaleString()}</div></div>
+          <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: 'var(--muted)' }}>% เสียงเชิงบวก</div><div style={{ fontSize: 26, fontWeight: 700, color: '#16a34a' }}>{s.posPct}%</div></div>
+          <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: 'var(--muted)' }}>% เป็นกลาง</div><div style={{ fontSize: 26, fontWeight: 700, color: 'var(--muted)' }}>{s.neuPct}%</div></div>
+          <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: 'var(--muted)' }}>% เสียงเชิงลบ</div><div style={{ fontSize: 26, fontWeight: 700, color: '#dc2626' }}>{s.negPct}%</div></div>
         </div>
 
         {/* เครื่องมือวิเคราะห์ที่ใช้จริง + วิเคราะห์ใหม่ด้วย LLM */}
@@ -67,7 +67,7 @@ export default async function Analyze() {
         {/* คิวยืนยัน — AI ไม่แน่ใจ */}
         <div className="card">
           <h3>⚠️ รายการที่ AI ไม่แน่ใจ — รอเจ้าหน้าที่ยืนยัน ({rows.filter(r => r.sentUncertain && !r.sentManual).length})</h3>
-          <ReviewQueue items={rows.filter(r => r.sentUncertain && !r.sentManual).slice(0, 10)
+          <ReviewQueue items={rows.filter(r => r.sentUncertain && !r.sentManual).slice(0, 20)
             .map(r => ({ id: r.id, ref: r.ref, voice: r.voice, reason: r.sentReason, channel: r.channel, project: r.project }))} />
         </div>
 
@@ -95,7 +95,7 @@ export default async function Analyze() {
           {/* Customer Journey — เรียงตามลำดับขั้น พร้อมคำอธิบายว่าเสียงแบบไหนอยู่ขั้นนั้น */}
           <div className="card">
             <h3>เส้นทางลูกค้า Customer Journey (6 ขั้น)</h3>
-            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: -6, marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -6, marginBottom: 10 }}>
               AI จำแนกจากประเด็นในข้อความเป็นหลัก · ใช้ช่องทางต้นทางช่วยเมื่อข้อความกำกวม
             </div>
             {journeySteps.map((j, i) => (
@@ -104,16 +104,16 @@ export default async function Analyze() {
                   <span>
                     <span style={{
                       display: 'inline-grid', placeItems: 'center', width: 18, height: 18, borderRadius: '50%',
-                      background: '#e0f2fe', color: '#0369a1', fontSize: 10.5, fontWeight: 700, marginRight: 7,
+                      background: '#e0f2fe', color: '#0369a1', fontSize: 11.5, fontWeight: 700, marginRight: 7,
                     }}>{i + 1}</span>
-                    {j.th} <span style={{ color: '#94a3b8', fontSize: 12 }}>({j.en})</span>
+                    {j.th} <span style={{ color: 'var(--muted)', fontSize: 12 }}>({j.en})</span>
                   </span>
                   <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{j.n} ({Math.round(j.n / total * 100)}%)</span>
                 </div>
                 <div style={{ height: 8, background: '#eef2f7', borderRadius: 6 }}>
                   <div style={{ width: Math.round(j.n / total * 100) + '%', height: '100%', background: '#0ea5e9', borderRadius: 6 }} />
                 </div>
-                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3, marginLeft: 25 }}>{j.desc}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, marginLeft: 25 }}>{j.desc}</div>
               </div>
             ))}
           </div>

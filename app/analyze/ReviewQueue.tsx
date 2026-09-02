@@ -43,16 +43,16 @@ export default function ReviewQueue({ items }: { items: ReviewItem[] }) {
       {err && <div style={{ color: '#b91c1c', fontSize: 12.5, marginBottom: 8 }}>{err}</div>}
       {items.map(it => (
         <div key={it.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', marginBottom: 9 }}>
-          <div style={{ fontSize: 11, color: 'var(--muted)' }}>{it.ref} · {it.channel} · {it.project}</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>{it.ref} · {it.channel} · {it.project}</div>
           <div style={{ fontSize: 13.5, margin: '4px 0' }}>&ldquo;{it.voice}&rdquo;</div>
-          <div style={{ fontSize: 11.5, color: '#9a3412', marginBottom: 8 }}>⚠ {it.reason}</div>
+          <div style={{ fontSize: 12, color: '#9a3412', marginBottom: 8 }}>⚠ {it.reason}</div>
           {role === 'mock' ? (
             <span style={{ fontSize: 12, color: 'var(--muted)' }}>* ปุ่มยืนยันใช้ได้เมื่อเชื่อม Supabase</span>
           ) : !canEdit ? (
             <span style={{ fontSize: 12, color: 'var(--muted)' }}>🔒 ต้องเป็นแอดมิน/ผู้ปฏิบัติงานจึงยืนยันได้</span>
           ) : (
             <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-              <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>ยืนยันเป็น:</span>
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>ยืนยันเป็น:</span>
               <button style={{ ...btn, color: '#16a34a' }} disabled={busyId === it.id} onClick={() => confirm(it.id, 'Positive')}>เชิงบวก</button>
               <button style={{ ...btn, color: '#64748b' }} disabled={busyId === it.id} onClick={() => confirm(it.id, 'Neutral')}>เป็นกลาง</button>
               <button style={{ ...btn, color: '#dc2626' }} disabled={busyId === it.id} onClick={() => confirm(it.id, 'Negative')}>เชิงลบ</button>

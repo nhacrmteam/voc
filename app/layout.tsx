@@ -3,6 +3,8 @@ import type { Metadata } from 'next';
 import AuthGate from './AuthGate';
 import NavMenu from './NavMenu';
 import ThemeToggle from './ThemeToggle';
+import FontSize from './FontSize';
+import ToTop from './ToTop';
 
 export const metadata: Metadata = {
   title: 'VOC Web App — การเคหะแห่งชาติ',
@@ -15,8 +17,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet" />
-        {/* ตั้งธีมก่อนหน้าเว็บวาด กันจอกระพริบตอนโหลด */}
-        <script dangerouslySetInnerHTML={{ __html: `try{if(localStorage.getItem('voc-theme')==='dark')document.documentElement.setAttribute('data-theme','dark')}catch(e){}` }} />
+        {/* ตั้งธีม + ขนาดตัวอักษรก่อนหน้าเว็บวาด กันจอกระพริบตอนโหลด */}
+        <script dangerouslySetInnerHTML={{ __html: `try{var d=document.documentElement;if(localStorage.getItem('voc-theme')==='dark')d.setAttribute('data-theme','dark');var f=localStorage.getItem('voc-font');if(f&&f!=='md')d.setAttribute('data-font',f)}catch(e){}` }} />
       </head>
       <body>
         <AuthGate>
@@ -28,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <div className="brand-text">กคช · VOC<span>Voice of Customer · 2569</span></div>
               </div>
               <NavMenu />
+              <FontSize />
               <ThemeToggle />
             </aside>
             <div className="main">
@@ -38,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </footer>
             </div>
           </div>
+          <ToTop />
         </AuthGate>
       </body>
     </html>

@@ -20,7 +20,7 @@ export default function TrendChart({ points, color = '#1f3a93' }: { points: { la
           </circle>
         ))}
       </svg>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--muted)', marginTop: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>
         {points.filter((_, i) => i % step === 0).map(p => <span key={p.label}>{p.label}</span>)}
       </div>
     </div>

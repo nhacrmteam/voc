@@ -275,6 +275,7 @@ export default function ImportPage() {
   const [dupTexts, setDupTexts] = useState<Set<string>>(new Set());
   const [skipDup, setSkipDup] = useState(true);
   const [undoing, setUndoing] = useState('');
+  const [showRows, setShowRows] = useState(20);   // ตารางตรวจสอบ: แสดงทีละ 20 แถว
   const [dFrom, setDFrom] = useState('');
   const [dTo, setDTo] = useState('');
   const [fyLabel, setFyLabel] = useState('');
@@ -356,7 +357,7 @@ export default function ImportPage() {
   }
 
   function readFile(f: File) {
-    setMsg(''); setErr(''); setRows([]); setGrid([]);
+    setMsg(''); setErr(''); setRows([]); setGrid([]); setShowRows(20);
     setFileName(f.name);
     const isXlsx = /\.(xlsx|xls)$/i.test(f.name);
     if (!isXlsx && !/\.(csv|txt)$/i.test(f.name)) { setErr('รองรับไฟล์ .csv และ .xlsx เท่านั้น'); return; }
@@ -979,14 +980,14 @@ export default function ImportPage() {
             <div className="imp-box" style={{ maxHeight: 430 }}>
               <table style={{ fontSize: 12.5 }}>
                 <thead><tr><th style={{ width: 34 }}>#</th><th>วันที่</th><th>หัวข้อ</th><th>ข้อความเสียงลูกค้า</th><th>แหล่ง</th><th>ผลตรวจ</th><th /></tr></thead>
-                <tbody>{rows.map((r, i) => (
+                <tbody>{rows.slice(0, showRows).map((r, i) => (
                   <tr key={i} style={r.err ? { background: 'rgba(220,38,38,.07)' } : dupTexts.has(r.text) ? { background: 'rgba(245,158,11,.1)' } : undefined}>
                     <td>{i + 1}</td>
                     <td><input value={r.occurred} onChange={e => editRow(i, 'occurred', e.target.value)} style={{ ...cellInp, width: 104 }} placeholder="YYYY-MM-DD" /></td>
                     <td><input value={r.topic} onChange={e => editRow(i, 'topic', e.target.value)} style={{ ...cellInp, width: 128 }} /></td>
                     <td><input value={r.text} onChange={e => editRow(i, 'text', e.target.value)} style={{ ...cellInp, width: 280 }} /></td>
                     <td><input value={r.source} onChange={e => editRow(i, 'source', e.target.value)} style={{ ...cellInp, width: 96 }} placeholder={source} /></td>
-                    <td style={{ whiteSpace: 'nowrap', fontSize: 11.5 }}>{r.err
+                    <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{r.err
                       ? <span style={{ color: 'var(--ibad)' }}>✗ {r.err}</span>
                       : dupTexts.has(r.text)
                       ? <span style={{ color: '#92400e' }}>🔁 ซ้ำ</span>
@@ -997,6 +998,13 @@ export default function ImportPage() {
                 ))}</tbody>
               </table>
             </div>
+            {rows.length > showRows && (
+              <div style={{ textAlign: 'center', marginTop: 10 }}>
+                <button type="button" className="imp-btn" onClick={() => setShowRows(n => n + 20)}>
+                  แสดงเพิ่ม 20 แถว (เหลืออีก {(rows.length - showRows).toLocaleString()})
+                </button>
+              </div>
+            )}
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13, marginTop: 16, cursor: 'pointer' }}>
               <input type="checkbox" checked={useLLM} style={{ width: 'auto' }} onChange={e => setUseLLM(e.target.checked)} />
@@ -1029,19 +1037,19 @@ export default function ImportPage() {
               <div className="imp-note">ยังไม่มีประวัติ — เมื่อบันทึกสำเร็จจะแสดงที่นี่ (ต้องรัน supabase_upload_log.sql ก่อน)</div>
             ) : (
               <div className="imp-box">
-                <table>
+                <table className="tcards">
                   <thead><tr><th>วันเวลา</th><th>ช่องทาง</th><th>ไฟล์</th><th>ทั้งหมด</th><th>สำเร็จ</th><th>โดย</th><th /></tr></thead>
                   <tbody>{history.map(h => {
                     const prof = Array.isArray(h.profiles) ? h.profiles[0] : h.profiles;
                     return (
                       <tr key={h.id}>
-                        <td style={{ whiteSpace: 'nowrap' }}>{(h.created_at || '').slice(0, 16).replace('T', ' ')}</td>
-                        <td>{CH.find(c => c.id === h.channel_id)?.name || h.channel_id}</td>
-                        <td>{h.file_name || '-'}</td>
-                        <td>{h.total}</td>
-                        <td style={{ color: 'var(--iok)', fontWeight: 600 }}>{h.ok_count}</td>
-                        <td>{prof?.full_name || '-'}</td>
-                        <td>
+                        <td data-label="วันเวลา" style={{ whiteSpace: 'nowrap' }}>{(h.created_at || '').slice(0, 16).replace('T', ' ')}</td>
+                        <td data-label="ช่องทาง">{CH.find(c => c.id === h.channel_id)?.name || h.channel_id}</td>
+                        <td className="cell-wrap" data-label="ไฟล์">{h.file_name || '-'}</td>
+                        <td data-label="ทั้งหมด">{h.total}</td>
+                        <td data-label="สำเร็จ" style={{ color: 'var(--iok)', fontWeight: 600 }}>{h.ok_count}</td>
+                        <td data-label="โดย">{prof?.full_name || '-'}</td>
+                        <td data-label="">
                           <button type="button" className="imp-btn" style={{ padding: '4px 10px', fontSize: 12 }}
                             disabled={undoing === h.id} onClick={() => undoImport(h)}>
                             {undoing === h.id ? 'กำลังลบ…' : '↩ ย้อนการนำเข้า'}

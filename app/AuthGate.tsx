@@ -25,7 +25,7 @@ function PwInput({ value, onChange, placeholder, minLen }: { value: string; onCh
     <div style={{ position: 'relative', margin: '4px 0 12px' }}>
       <input style={{ ...inp, margin: 0, paddingRight: 42 }} type={show ? 'text' : 'password'} value={value} onChange={onChange} required minLength={minLen ?? 6} placeholder={placeholder} />
       <button type="button" onClick={() => setShow(s => !s)} aria-label={show ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
-        style={{ position: 'absolute', right: 6, top: 0, bottom: 0, display: 'flex', alignItems: 'center', border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: '0 6px' }}>
+        style={{ position: 'absolute', right: 6, top: 0, bottom: 0, display: 'flex', alignItems: 'center', border: 'none', background: 'transparent', cursor: 'pointer', color: '#556274', padding: '0 6px' }}>
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
           <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
           <circle cx="12" cy="12" r="3" />
@@ -252,7 +252,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
                 </div>
                 <label style={lab}>อีเมล * (อีเมลพนักงาน หรือ อีเมลภายนอก เช่น Gmail)</label>
                 <input style={inp} value={email} onChange={e => setEmail(e.target.value)} type="email" required placeholder="you@nha.co.th หรือ you@gmail.com" />
-                <div style={{ fontSize: 11.5, color: '#64748b', margin: '-8px 0 12px' }}>ใช้อีเมลจริงที่เปิดได้ เพราะต้องยืนยันอีเมลก่อนใช้งาน</div>
+                <div style={{ fontSize: 12, color: '#556274', margin: '-8px 0 12px' }}>ใช้อีเมลจริงที่เปิดได้ เพราะต้องยืนยันอีเมลก่อนใช้งาน</div>
                 <label style={lab}>รหัสผ่าน * (อย่างน้อย 6 ตัว)</label>
                 <PwInput value={pw} onChange={e => setPw(e.target.value)} placeholder="••••••••" minLen={6} />
                 <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังสมัคร…' : 'สมัครใช้งาน'}</button>
@@ -292,7 +292,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Footer หน้าล็อกอิน */}
-        <div style={{ position: 'absolute', bottom: 12, left: 0, right: 0, textAlign: 'center', color: 'rgba(255,255,255,.75)', fontSize: 11.5, lineHeight: 1.9, padding: '0 16px' }}>
+        <div style={{ position: 'absolute', bottom: 12, left: 0, right: 0, textAlign: 'center', color: 'rgba(255,255,255,.88)', fontSize: 12, lineHeight: 1.9, padding: '0 16px' }}>
           <div>Produced by the Marketing Department, National Housing Authority · Developed by Eksunee Kruttawee (AI-assisted)</div>
           <div>© {new Date().getFullYear()} National Housing Authority of Thailand. All rights reserved.</div>
         </div>
@@ -316,7 +316,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
           <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>บัญชีรอการอนุมัติ</div>
           <div style={{ fontSize: 14, color: '#475569', marginTop: 10, lineHeight: 1.7 }}>
             สมัครใช้งานเรียบร้อยแล้ว<br />กรุณารอแอดมินกำหนดบทบาทให้ก่อนเข้าใช้งานระบบ<br />
-            <span style={{ fontSize: 12.5, color: '#94a3b8' }}>({session.user.email})</span>
+            <span style={{ fontSize: 12.5, color: '#556274' }}>({session.user.email})</span>
           </div>
           <button onClick={signOut} style={{ marginTop: 22, padding: '11px 22px', background: '#1f3a93', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>ออกจากระบบ</button>
         </div>

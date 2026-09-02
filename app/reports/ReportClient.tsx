@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Voc } from '../../lib/data';
 import { PROJECT_TYPES } from '../../lib/data';
 import { scoreStrengths, strengthBand } from '../../lib/priority';
+import EmptyState from '../components/EmptyState';
 
 const SENT_TH: Record<string, string> = { Positive: 'เชิงบวก', Neutral: 'เป็นกลาง', Negative: 'เชิงลบ' };
 const QUARTERS = [
@@ -185,6 +186,14 @@ export default function ReportClient({ rows }: { rows: Voc[] }) {
       </header>
 
       <div className="content">
+        {fr.length === 0 ? (
+          <div className="card">
+            <EmptyState icon="📄" title="ไม่มีข้อมูลให้ออกรายงานในช่วงนี้"
+              detail={<>ช่วงที่เลือกคือ <b>{scope}</b> ซึ่งยังไม่มีเสียงลูกค้า — รายงานที่ดาวน์โหลดจะว่างเปล่า<br />
+                ลองเลือก &ldquo;ทั้งหมด (ตั้งแต่มีระบบ)&rdquo; ขยายประเภท/ชื่อโครงการ หรือนำเข้าข้อมูลเพิ่มก่อน</>} />
+          </div>
+        ) : (
+        <>
         <div className="card" style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', fontSize: 13 }}>
           📄 กำลังแสดงรายงานของช่วง: <b>{scope}</b> · พบ <b>{fr.length.toLocaleString()}</b> รายการ — ทุกรายงานด้านล่างอิงตามตัวกรองนี้
         </div>
@@ -202,6 +211,8 @@ export default function ReportClient({ rows }: { rows: Voc[] }) {
             </div>
           ))}
         </div>
+        </>
+        )}
       </div>
     </>
   );
