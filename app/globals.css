@@ -382,7 +382,9 @@ th.sortable[aria-sort="ascending"] .ar,th.sortable[aria-sort="descending"] .ar{o
   .vm-panel{max-width:none;border-radius:0;max-height:100vh;height:100vh}
   .vm-body{padding:13px 12px 18px}
   .vm-head{padding:12px 13px}
-  .vm-head h2{font-size:15.5px}
+  /* หัวเรื่องบรรทัดเดียว — ปล่อยให้ตัดขึ้นบรรทัดใหม่จะดันเนื้อหาลงไปมากบนจอแคบ */
+  .vm-head h2{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vm-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }
 
 /* โหมดมืด — เขียนสีตรง ๆ เพราะป๊อปอัปอยู่นอก .main จึงไม่โดน invert */
@@ -445,3 +447,35 @@ html[data-theme="dark"] .vm-panel .btn{background:#2e6cf0}
   .vd-table th{border:none;padding:6px 0 0;font-size:12px;color:var(--muted)}
   .vd-table td{border:none;padding:0 0 2px}
 }
+
+/* ----- ป๊อปอัป: เลื่อนดูรายการก่อนหน้า/ถัดไป ----- */
+.vm-nav{display:flex;align-items:center;gap:2px;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}
+.vm-nav button{width:30px;height:32px;border:none;background:none;color:var(--navy);font-size:17px;line-height:1;cursor:pointer}
+.vm-nav button:hover:not(:disabled){background:#eef2ff}
+.vm-nav button:disabled{opacity:.3;cursor:not-allowed}
+.vm-nav button:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.vm-count{font-size:12px;color:var(--muted);min-width:52px;text-align:center;font-variant-numeric:tabular-nums}
+.vm-count i{font-style:normal;opacity:.5;margin:0 2px}
+
+.vm-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.vm-fbtn{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 14px;font-family:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
+.vm-fbtn span{font-weight:400;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vm-fbtn:hover:not(:disabled){border-color:var(--blue);color:var(--blue)}
+.vm-fbtn:disabled{opacity:.4;cursor:not-allowed}
+.vm-fbtn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.vm-hint{flex:0 1 auto;font-size:12px;color:var(--muted);text-align:center}
+
+@media(max-width:640px){
+  .vm-hint{display:none}       /* มือถือไม่มีคีย์บอร์ด คำแนะนำปุ่มลูกศรจึงไม่มีประโยชน์ */
+  .vm-fbtn span{display:none}
+  .vm-fbtn{flex:1 1 0}
+  .vm-full{display:none}       /* เนื้อที่หัวกล่องแคบ — เปิดหน้าเต็มบนมือถือแทบไม่ได้ใช้ */
+}
+
+html[data-theme="dark"] .vm-nav{background:#121c30;border-color:#27354f}
+html[data-theme="dark"] .vm-nav button{color:#8fb2ff}
+html[data-theme="dark"] .vm-nav button:hover:not(:disabled){background:#1b2740}
+html[data-theme="dark"] .vm-count{color:#94a4be}
+html[data-theme="dark"] .vm-foot{border-top-color:#27354f}
+html[data-theme="dark"] .vm-fbtn{background:#121c30;border-color:#27354f;color:#e8eef8}
+html[data-theme="dark"] .vm-fbtn span,html[data-theme="dark"] .vm-hint{color:#94a4be}
