@@ -387,6 +387,9 @@ function ChannelDetail({ rows, allRows, scores, name, period, onBack }: { rows: 
 
           <div className="card" style={{ marginTop: 16 }}>
             <h3>☁️ Word Cloud — คำที่พูดถึงมากในช่องทางนี้ (คลิกคำเพื่อค้นหา)</h3>
+            <div style={{ fontSize: 12, color: 'var(--muted)', margin: '-4px 0 2px' }}>
+              คิดจาก <b>{view.length.toLocaleString()}</b> รายการตามตัวกรองด้านบน — เปลี่ยนช่วงเวลา/แหล่งที่มาแล้วคำจะเปลี่ยนตาม
+            </div>
             <div style={{ padding: '10px 4px' }}><WordCloud freq={cloud} basePath="/voc" period={period} /></div>
           </div>
 

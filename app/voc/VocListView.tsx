@@ -86,21 +86,33 @@ export default function VocListView({ rows, initialQ, initialFy, initialQuarter 
   }, [rows]);
   const projOptions = ptype === 'all' ? projectNames : projectNames.filter(p => p.type === ptype);
 
-  const cloud = useMemo(() => computeCloud(rows), [rows]);
-
-  // กรองทุกเงื่อนไข "ยกเว้นขั้นเส้นทางลูกค้า" — ใช้เป็นฐานนับจำนวนต่อขั้น
-  // จะได้เห็นจำนวนจริงของแต่ละขั้นตามตัวกรองปัจจุบัน และสลับขั้นไปมาได้โดยตัวเลขไม่หาย
-  const frBase = useMemo(() => rows.filter(r =>
+  // ---- กรองเป็น 3 ชั้น เพื่อให้แต่ละส่วนของหน้าใช้ชั้นที่ถูกต้อง ----
+  // ชั้น 1: ตัวเลือกด้านบน (ช่วงเวลา/ประเภทโครงการ/ชื่อโครงการ/ช่องทาง) — ยังไม่รวมคำค้นและขั้นเส้นทางลูกค้า
+  const frFilters = useMemo(() => rows.filter(r =>
     (allTime || (r.occurredAt >= range.from && r.occurredAt <= range.to)) &&
     (ptype === 'all' || r.projectType === ptype) &&
     (!projQ || (r.project || '').toLowerCase().includes(projQ)) &&
-    (channel === 'all' || r.channel === channel) &&
-    (!qq || (r.voice + r.topic + r.ref + r.owner + r.project).toLowerCase().includes(qq))
-  ), [rows, allTime, range.from, range.to, ptype, projQ, channel, qq]);
+    (channel === 'all' || r.channel === channel)
+  ), [rows, allTime, range.from, range.to, ptype, projQ, channel]);
 
+  // ชั้น 2: + คำค้น — ใช้เป็นฐานนับจำนวนต่อขั้นเส้นทางลูกค้า
+  // จะได้เห็นจำนวนจริงของแต่ละขั้นตามตัวกรองปัจจุบัน และสลับขั้นไปมาได้โดยตัวเลขไม่หาย
+  const frBase = useMemo(() =>
+    qq ? frFilters.filter(r => (r.voice + r.topic + r.ref + r.owner + r.project).toLowerCase().includes(qq)) : frFilters,
+    [frFilters, qq]);
+
+  // ชั้น 3: + ขั้นเส้นทางลูกค้า = ชุดที่แสดงในตาราง
   const fr = useMemo(() =>
     journey === 'all' ? frBase : frBase.filter(r => r.journey === journey),
     [frBase, journey]);
+
+  // Word Cloud — คิดจากชั้น 1 + ขั้นเส้นทางลูกค้า แต่ **จงใจไม่รวมคำค้น**
+  // เดิมคิดจาก rows ทั้งหมด คำจึงค้างอยู่ที่ภาพรวมสะสม ไม่เปลี่ยนตามไตรมาส/ปีที่เลือก
+  // ที่ไม่รวมคำค้น: ถ้ารวมด้วย พอคลิกคำหนึ่งเมฆคำจะยุบเหลือคำนั้นคำเดียว คลิกคำอื่นต่อไม่ได้
+  const cloudRows = useMemo(() =>
+    journey === 'all' ? frFilters : frFilters.filter(r => r.journey === journey),
+    [frFilters, journey]);
+  const cloud = useMemo(() => computeCloud(cloudRows), [cloudRows]);
 
   // เรียงตามคอลัมน์ที่ผู้ใช้คลิก (ยังไม่เลือก = ลำดับเดิมจากฐานข้อมูล)
   const { sort, toggle, sorted } = useSort(fr, SORTERS);
@@ -185,6 +197,12 @@ export default function VocListView({ rows, initialQ, initialFy, initialQuarter 
       <div className="content">
         <div className="card">
           <h3>☁️ Word Cloud — คำที่ลูกค้าพูดถึงมาก (คลิกคำเพื่อค้นหา)</h3>
+          <div style={{ fontSize: 12, color: 'var(--muted)', margin: '-4px 0 6px' }}>
+            คิดจาก <b>{cloudRows.length.toLocaleString()}</b> รายการตามตัวกรองด้านบน
+            {allTime ? ' (ทั้งหมดตั้งแต่มีระบบ)' : ` (ปีงบ ${beYear} · ${QUARTERS.find(x => x.k === quarter)?.label || ''})`}
+            {journey !== 'all' && ` · ${JOURNEY_TH[journey] || journey}`}
+            {' '}— เปลี่ยนตัวกรองแล้วคำจะเปลี่ยนตาม
+          </div>
           <WordCloud freq={cloud} basePath="/voc" onPick={pickWord} />
         </div>
 
