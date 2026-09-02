@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import type { Voc } from '../../lib/data';
 import { PROJECT_TYPES, CHANNELS, JOURNEYS, JOURNEY_TH, JOURNEY_COLOR } from '../../lib/data';
+import EmptyState from '../components/EmptyState';
+import VocModal from '../voc/VocModal';
 
 // ปีงบประมาณ (พ.ศ.) — ปีงบ Y เริ่ม 1 ต.ค. ปี (Y-1)
 // คำนวณปีงบ+ไตรมาส "ปัจจุบัน" จากวันที่จริง (เลื่อนตามเวลาเอง)
@@ -120,8 +122,8 @@ function TrendCombo({ data }: { data: { label: string; n: number; pos: number; n
           return (
             <g key={v}>
               <line x1={L} y1={yy} x2={W - R} y2={yy} stroke="#eef2f8" strokeWidth={1} />
-              <text x={L - 9} y={yy + 3.5} textAnchor="end" fontSize={10.5} fill="#94a3b8">{v.toLocaleString()}</text>
-              <text x={W - R + 9} y={yy + 3.5} fontSize={10.5} fill="#94a3b8">
+              <text x={L - 9} y={yy + 3.5} textAnchor="end" fontSize={11} fill="#556274">{v.toLocaleString()}</text>
+              <text x={W - R + 9} y={yy + 3.5} fontSize={11} fill="#556274">
                 {Math.round(100 / (ticks.length - 1) * i)}
               </text>
             </g>
@@ -156,12 +158,12 @@ function TrendCombo({ data }: { data: { label: string; n: number; pos: number; n
         {/* ชื่อเดือน — เดือนที่ยังไม่มีข้อมูลจะจางลง */}
         {data.map((d, i) => (
           <text key={'x' + i} x={x(i)} y={H - 14} textAnchor="middle" fontSize={11}
-            fill={d.n > 0 ? '#475569' : '#cbd5e1'} fontWeight={d.n > 0 ? 500 : 400}>{d.label}</text>
+            fill={d.n > 0 ? '#475569' : '#94a3b8'} fontWeight={d.n > 0 ? 500 : 400}>{d.label}</text>
         ))}
-        <text x={14} y={T + ih / 2} fontSize={10.5} fill="#94a3b8" transform={`rotate(-90 14 ${T + ih / 2})`} textAnchor="middle">จำนวนเสียง</text>
-        <text x={W - 10} y={T + ih / 2} fontSize={10.5} fill="#94a3b8" transform={`rotate(90 ${W - 10} ${T + ih / 2})`} textAnchor="middle">เปอร์เซ็นต์</text>
+        <text x={14} y={T + ih / 2} fontSize={11} fill="#556274" transform={`rotate(-90 14 ${T + ih / 2})`} textAnchor="middle">จำนวนเสียง</text>
+        <text x={W - 10} y={T + ih / 2} fontSize={11} fill="#556274" transform={`rotate(90 ${W - 10} ${T + ih / 2})`} textAnchor="middle">เปอร์เซ็นต์</text>
 
-        {!hasData && <text x={W / 2} y={T + ih / 2} textAnchor="middle" fontSize={13} fill="#94a3b8">ยังไม่มีข้อมูลในช่วงนี้</text>}
+        {!hasData && <text x={W / 2} y={T + ih / 2} textAnchor="middle" fontSize={13} fill="#556274">ยังไม่มีข้อมูลในช่วงนี้</text>}
       </svg>
       <div style={{ display: 'flex', gap: 20, justifyContent: 'center', fontSize: 12, marginTop: 6, flexWrap: 'wrap' }}>
         <span><span style={{ display: 'inline-block', width: 15, height: 10, background: 'linear-gradient(#93b4f5,#dbe6fb)', borderRadius: 3, marginRight: 6, verticalAlign: 'middle' }} />จำนวน VOC</span>
@@ -229,6 +231,7 @@ const sel: React.CSSProperties = { padding: '8px 11px', border: '1px solid var(-
 
 export default function DashboardView({ rows }: { rows: Voc[] }) {
   const [maxFY, setMaxFY] = useState(2569);        // ปีงบล่าสุด (อ้างอิงวันปัจจุบัน)
+  const [openId, setOpenId] = useState<string | null>(null);   // รายการที่เปิดป๊อปอัปอยู่
   const [beYear, setBeYear] = useState(2569);
   const [quarter, setQuarter] = useState('q3');
   const [ptype, setPtype] = useState('all');
@@ -434,7 +437,7 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
         {/* LIVE ticker */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#0f172a', color: '#fff', borderRadius: 10, padding: '10px 14px', fontSize: 12.5, marginBottom: 16, overflow: 'hidden' }}>
           <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#ef4444', flexShrink: 0, boxShadow: '0 0 0 0 rgba(239,68,68,.6)', animation: 'pulse 1.6s infinite' }} />
-          <b style={{ fontSize: 11, color: '#fca5a5', flexShrink: 0 }}>LIVE</b>
+          <b style={{ fontSize: 12, color: '#fca5a5', flexShrink: 0 }}>LIVE</b>
           <div style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', transition: 'opacity .25s' }}>
             {tick ? (
               <><span className="tag">{tick.ref}</span> &nbsp;{tick.channel}{tick.source !== tick.channel ? ' › ' + tick.source : ''} &nbsp;·&nbsp; {tick.topic} &nbsp;<span className={'pill ' + sp}>{tick.sentiment}</span></>
@@ -564,7 +567,7 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
               );
             })}
           </div>
-          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 10 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>
             นับตามตัวกรองด้านบน ({pd.label}) · AI จำแนกขั้นจากประเด็นในข้อความ และใช้ช่องทางต้นทางช่วยเมื่อกำกวม
           </div>
         </div>
@@ -616,7 +619,7 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
                   </div>
                 </div>
               ))}
-            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 10 }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>
               <Link href="/prioritize" style={{ color: 'var(--blue)' }}>ดูตารางจุดแข็งแบบถ่วงน้ำหนัก →</Link>
             </div>
           </div>
@@ -632,7 +635,7 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
             <div>
               <h4 style={{ color: 'var(--green)' }}>👍 เชิงบวกสูงสุด</h4>
               {topPos.length === 0
-                ? <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>ยังไม่มีเสียงเชิงบวกที่ระบุโครงการ</div>
+                ? <div style={{ fontSize: 13, color: 'var(--muted)' }}>ยังไม่มีเสียงเชิงบวกที่ระบุโครงการ</div>
                 : <ol>{topPos.map(([p, o], i) => (
                   <li key={p}>
                     <span>{i + 1}. <Link href={'/voc?q=' + encodeURIComponent(p)}>{p}</Link></span>
@@ -643,7 +646,7 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
             <div>
               <h4 style={{ color: 'var(--red)' }}>👎 เชิงลบสูงสุด</h4>
               {topNeg.length === 0
-                ? <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>ยังไม่มีเสียงเชิงลบที่ระบุโครงการ</div>
+                ? <div style={{ fontSize: 13, color: 'var(--muted)' }}>ยังไม่มีเสียงเชิงลบที่ระบุโครงการ</div>
                 : <ol>{topNeg.map(([p, o], i) => (
                   <li key={p}>
                     <span>{i + 1}. <Link href={'/voc?q=' + encodeURIComponent(p)}>{p}</Link></span>
@@ -653,7 +656,7 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
             </div>
           </div>
           {topPos.length === 0 && topNeg.length === 0 && (
-            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 10 }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>
               * ข้อมูลที่นำเข้าต้องจับคู่คอลัมน์ &ldquo;โครงการ&rdquo; ในขั้นนำเข้า จึงจะแสดงที่นี่ได้
             </div>
           )}
@@ -662,21 +665,35 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
         {/* รายการล่าสุด */}
         <div className="card">
           <h3>💬 รายการล่าสุด ({pd.label})</h3>
-          <table>
-            <thead><tr><th>รหัส</th><th>วันที่ต้นทาง</th><th>ช่องทาง</th><th>โครงการ</th><th>หัวข้อ</th><th>Sentiment</th><th>ความรุนแรง</th></tr></thead>
-            <tbody>{f.slice(0, 15).map(r => (
-              <tr key={r.id}>
-                <td><Link href={'/voc/' + r.id} className="tag">{r.ref}</Link></td>
-                <td>{r.occurredAt}{r.imported ? ' (ไฟล์)' : ''}</td>
-                <td>{r.channel}</td><td>{r.project}</td><td>{r.topic}</td>
-                <td><span className={'pill ' + (r.sentiment === 'Positive' ? 'p-pos' : r.sentiment === 'Negative' ? 'p-neg' : 'p-neu')}>{r.sentiment}</span></td>
-                <td><span className={'pill ' + (r.priority === 'High' ? 'p-hi' : r.priority === 'Medium' ? 'p-md' : 'p-lo')}>{r.priority}</span></td>
-              </tr>))}
-            </tbody>
-          </table>
-          {f.length === 0 && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>ไม่มีข้อมูลในช่วง/ตัวกรองนี้</div>}
+          {f.length > 0 && (
+            <table className="tcards">
+              <thead><tr><th>รหัส</th><th>วันที่ต้นทาง</th><th>ช่องทาง</th><th>โครงการ</th><th>หัวข้อ</th><th>Sentiment</th><th>ความรุนแรง</th></tr></thead>
+              <tbody>{f.slice(0, 15).map(r => (
+                <tr key={r.id}>
+                  <td data-label="รหัส">
+                    <button type="button" className="tag" onClick={() => setOpenId(r.id)} title={'ดูรายละเอียด ' + r.ref}>{r.ref}</button>
+                  </td>
+                  <td data-label="วันที่ต้นทาง">{r.occurredAt}{r.imported ? ' (ไฟล์)' : ''}</td>
+                  <td data-label="ช่องทาง">{r.channel}</td><td data-label="โครงการ">{r.project}</td>
+                  <td className="cell-wrap" data-label="หัวข้อ">
+                    <button type="button" className="voice-open" onClick={() => setOpenId(r.id)} title={r.voice + '\n(คลิกเพื่อดูรายละเอียดและคะแนน)'}>{r.topic}</button>
+                  </td>
+                  <td data-label="Sentiment"><span className={'pill ' + (r.sentiment === 'Positive' ? 'p-pos' : r.sentiment === 'Negative' ? 'p-neg' : 'p-neu')}>{r.sentiment}</span></td>
+                  <td data-label="ความรุนแรง"><span className={'pill ' + (r.priority === 'High' ? 'p-hi' : r.priority === 'Medium' ? 'p-md' : 'p-lo')}>{r.priority}</span></td>
+                </tr>))}
+              </tbody>
+            </table>
+          )}
+          {f.length === 0 && (rows.length === 0
+            ? <EmptyState icon="📥" title="ยังไม่มีเสียงลูกค้าในระบบ"
+                detail={<>นำเข้าข้อมูลจากช่องทางใดช่องทางหนึ่งก่อน แล้วหน้านี้จะสรุป KPI แนวโน้ม และประเด็นที่ควรเฝ้าระวังให้อัตโนมัติ</>}
+                actions={<Link className="btn" href="/import">นำเข้าข้อมูล</Link>} />
+            : <EmptyState title="ไม่มีข้อมูลในช่วง/ตัวกรองนี้"
+                detail={<>ลองเลือก &ldquo;ทั้งหมด (ตั้งแต่มีระบบ)&rdquo; หรือขยายประเภท/ชื่อโครงการให้กว้างขึ้น</>} />)}
         </div>
       </div>
+
+      <VocModal r={openId ? rows.find(x => x.id === openId) || null : null} rows={rows} onClose={() => setOpenId(null)} />
     </>
   );
 }
