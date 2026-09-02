@@ -693,7 +693,7 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
         </div>
       </div>
 
-      <VocModal r={openId ? rows.find(x => x.id === openId) || null : null} rows={rows} onClose={() => setOpenId(null)} />
+      <VocModal id={openId} list={f.slice(0, 15)} rows={rows} onChange={setOpenId} onClose={() => setOpenId(null)} />
     </>
   );
 }
