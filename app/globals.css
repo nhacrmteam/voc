@@ -484,3 +484,19 @@ html[data-theme="dark"] .vm-fbtn span,html[data-theme="dark"] .vm-hint{color:#94
 .wc-word{background:none;border:none;padding:0;font-family:inherit;cursor:pointer;line-height:1.15}
 .wc-word:hover{text-decoration:underline!important;text-underline-offset:4px}
 .wc-word:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:4px}
+
+/* ===== ป้ายแจ้งงานค้าง มุมขวาบน (TopBadges) =====
+   อยู่นอก .main จึงไม่โดน filter:invert ของโหมดมืด — ต้องเขียนสีเข้มเอง */
+.tb{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:20px;padding:5px 11px;white-space:nowrap;border:1px solid transparent;transition:filter .14s}
+.tb:hover{filter:brightness(.95)}
+.tb:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.tb b{font-weight:700}
+.tb-review{background:#fee2e2;color:#b91c1c;border-color:#fca5a5}
+.tb-pending{background:#fef3c7;color:#92400e;border-color:#fcd34d}
+html[data-theme="dark"] .tb-review{background:#3d1a1a;color:#fca5a5;border-color:#7a2b2b}
+html[data-theme="dark"] .tb-pending{background:#3d2f10;color:#fcd34d;border-color:#7a5a12}
+@media(max-width:560px){
+  /* จอแคบ เหลือแค่ไอคอน+ตัวเลข ไม่ให้แถบล้น */
+  .tb{padding:5px 9px;font-size:11.5px}
+  .tb .tb-lbl{display:none}
+}
