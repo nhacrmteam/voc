@@ -47,8 +47,8 @@ export default function TopBadges({ role }: { role: string }) {
   return (
     <>
       {review > 0 && (
-        <Link href="/analyze" className="tb tb-review"
-          title={`มี ${review.toLocaleString()} รายการที่ AI ไม่แน่ใจ รอเจ้าหน้าที่ยืนยัน — คลิกเพื่อไปที่หน้า AI วิเคราะห์`}>
+        <Link href="/review" className="tb tb-review"
+          title={`มี ${review.toLocaleString()} รายการที่ AI ไม่แน่ใจ รอเจ้าหน้าที่ยืนยัน — คลิกเพื่อไปที่คิวยืนยัน`}>
           <span aria-hidden>🔔</span> <span className="tb-lbl">รอยืนยัน</span> <b>{review.toLocaleString()}</b>
         </Link>
       )}
