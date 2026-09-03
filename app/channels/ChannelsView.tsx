@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import type { Voc } from '../../lib/data';
-import { CHANNELS, PROJECT_TYPES, JOURNEY_TH, JOURNEY_COLOR, journeyLabel } from '../../lib/data';
+import { CHANNELS, PROJECT_TYPES, JOURNEY_TH, JOURNEY_COLOR, journeyLabel, sortSources } from '../../lib/data';
 import { scoreTopics, scoreBand, type TopicScore } from '../../lib/priority';
 import { computeCloud } from '../../lib/cloud';
 import WordCloud from '../components/WordCloud';
@@ -237,7 +237,8 @@ export default function ChannelsView({ rows }: { rows: Voc[] }) {
 
 function ChannelDetail({ rows, allRows, scores, name, period, onBack }: { rows: Voc[]; allRows: Voc[]; scores: Map<string, TopicScore>; name: string; period: { fy: number; qt: string }; onBack: () => void }) {
   // แหล่งที่มาในช่องทาง (เช่น Social → Facebook / Line OA)
-  const allSources = Array.from(new Set(rows.map(r => r.source).filter(Boolean))) as string[];
+  // เรียงตามลำดับใน CHANNEL_SOURCES ไม่ใช่ลำดับที่เจอในข้อมูล (ไม่งั้นแท็บสลับที่ไปมา)
+  const allSources = sortSources(name, Array.from(new Set(rows.map(r => r.source).filter(Boolean))) as string[]);
   const [source, setSource] = useState('all');
   const [openId, setOpenId] = useState<string | null>(null);   // รายการที่เปิดป๊อปอัปอยู่
   const view = source === 'all' ? rows : rows.filter(r => r.source === source);
