@@ -1,4 +1,8 @@
 'use client';
+// ReviewQueue — เลิกใช้แล้ว (ก.ย. 2569)
+// ย้ายไปเป็นหน้าจัดการคิวเต็มรูปแบบที่ app/review/ReviewQueueView.tsx
+// (มีตัวกรอง แบ่งหน้า เลือกหลายรายการ และความคืบหน้า)
+// คงไฟล์ไว้ชั่วคราวกัน import ที่ค้างบน GitHub ทำให้ build ล้ม — ลบได้เมื่อสะดวก
 // ReviewQueue — รายการที่ AI ไม่แน่ใจ ให้เจ้าหน้าที่ยืนยัน/แก้ไข Sentiment (human-in-the-loop)
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
