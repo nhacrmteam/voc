@@ -1,5 +1,5 @@
+import Link from 'next/link';
 import { listVOC, sentimentStats, JOURNEYS, JOURNEY_TH, JOURNEY_DESC } from '../../lib/data';
-import ReviewQueue from './ReviewQueue';
 import ReanalyzePanel from './ReanalyzePanel';
 
 export const dynamic = 'force-dynamic';
@@ -37,6 +37,7 @@ export default async function Analyze() {
   const rows = await listVOC();
   const s = await sentimentStats();
   const total = rows.length || 1;
+  const pendingReview = rows.filter(r => r.sentUncertain && !r.sentManual).length;
 
   const prod = groupBy(rows, 'catProduct');
   const sales = groupBy(rows, 'catSales');
@@ -64,11 +65,23 @@ export default async function Analyze() {
         {/* เครื่องมือวิเคราะห์ที่ใช้จริง + วิเคราะห์ใหม่ด้วย LLM */}
         <ReanalyzePanel />
 
-        {/* คิวยืนยัน — AI ไม่แน่ใจ */}
-        <div className="card">
-          <h3>⚠️ รายการที่ AI ไม่แน่ใจ — รอเจ้าหน้าที่ยืนยัน ({rows.filter(r => r.sentUncertain && !r.sentManual).length})</h3>
-          <ReviewQueue items={rows.filter(r => r.sentUncertain && !r.sentManual).slice(0, 20)
-            .map(r => ({ id: r.id, ref: r.ref, voice: r.voice, reason: r.sentReason, channel: r.channel, project: r.project }))} />
+        {/* คิวยืนยัน — สรุปแล้วส่งต่อไปหน้าจัดการคิวเต็ม (/review)
+            เดิมแปะรายการ 20 อันไว้ตรงนี้ ทำให้หน้านี้ยาวและทำงานต่อไม่ได้จริง */}
+        <div className="card rq-teaser">
+          <div>
+            <h3 style={{ marginBottom: 4 }}>✋ คิวยืนยันเสียงลูกค้า</h3>
+            <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>
+              รายการที่ AI ไม่มั่นใจ (ความเชื่อมั่น ≤ 50%) รอเจ้าหน้าที่ตรวจและยืนยัน<br />
+              ยืนยันแล้วจะถูกล็อก ไม่ถูกทับเมื่อสั่งวิเคราะห์ใหม่ด้วย LLM
+            </div>
+          </div>
+          <div style={{ textAlign: 'center', flex: '0 0 auto' }}>
+            <div style={{ fontSize: 38, fontWeight: 700, lineHeight: 1.1, color: pendingReview > 0 ? '#b45309' : 'var(--green)' }}>
+              {pendingReview.toLocaleString()}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>รายการรอยืนยัน</div>
+            <Link href="/review" className="btn">เปิดคิวยืนยัน →</Link>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 16 }}>
