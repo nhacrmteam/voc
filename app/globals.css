@@ -500,3 +500,54 @@ html[data-theme="dark"] .tb-pending{background:#3d2f10;color:#fcd34d;border-colo
   .tb{padding:5px 9px;font-size:11.5px}
   .tb .tb-lbl{display:none}
 }
+
+/* ============================================================
+   คิวยืนยันเสียงลูกค้า (/review) — หน้าจัดการงาน
+   ============================================================ */
+.rq-head{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:16px}
+.rq-stat .l{font-size:12px;color:var(--muted)}
+.rq-stat .v{font-size:32px;font-weight:700;line-height:1.15;color:var(--navy)}
+.rq-stat .v.ok{color:var(--green)}
+.rq-stat .s{font-size:12px;color:var(--muted)}
+.rq-note{font-size:12.5px;color:var(--muted);line-height:1.85;align-self:center;grid-column:span 2;min-width:0}
+.rq-note b{color:var(--ink)}
+.rq-link{color:var(--blue);font-weight:600;font-size:12.5px}
+.rq-link:hover{text-decoration:underline}
+.rq-err{background:rgba(220,38,38,.1);color:#b91c1c;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:12px}
+
+/* แถบเครื่องมือเลือกหลายรายการ */
+.rq-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:13px}
+.rq-pickall{display:flex;align-items:center;gap:7px;cursor:pointer;font-weight:600}
+.rq-picked{flex:1;color:var(--muted);font-size:12.5px}
+
+/* การ์ดงาน 1 รายการ */
+.rq-card{background:#fff;border:1px solid var(--line);border-radius:13px;padding:13px 15px;margin-bottom:10px;transition:border-color .14s,box-shadow .14s}
+.rq-card:hover{border-color:#c7d2fe}
+.rq-card.on{border-color:var(--blue);box-shadow:0 0 0 3px rgba(46,108,240,.12)}
+.rq-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rq-meta{flex:1;min-width:0;display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.rq-meta i{font-style:normal;opacity:.5}
+.rq-guess{display:flex;align-items:center;gap:7px;flex:0 0 auto;font-size:12px}
+.rq-lab{color:var(--muted);font-size:12px}
+.rq-conf{display:inline-block;width:54px;height:6px;background:#eef2f7;border-radius:6px;overflow:hidden}
+.rq-conf i{display:block;height:100%;background:var(--amber);border-radius:6px}
+.rq-topic{font-size:12.5px;font-weight:600;margin-top:9px}
+.rq-voice{font-size:14px;line-height:1.65;margin:3px 0 6px}
+.rq-reason{font-size:12px;color:#9a3412;margin-bottom:10px}
+.rq-acts{display:flex;align-items:center;gap:7px;flex-wrap:wrap;border-top:1px dashed var(--line);padding-top:10px}
+.rq-btn{border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 14px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;transition:.14s}
+.rq-btn:disabled{opacity:.45;cursor:not-allowed}
+.rq-btn.pos{color:#15803d}.rq-btn.pos:hover:not(:disabled){background:#dcfce7;border-color:#86efac}
+.rq-btn.neu{color:#475569}.rq-btn.neu:hover:not(:disabled){background:#f1f5f9;border-color:#cbd5e1}
+.rq-btn.neg{color:#b91c1c}.rq-btn.neg:hover:not(:disabled){background:#fee2e2;border-color:#fca5a5}
+.rq-btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.rq-more{margin-left:auto;font-size:12.5px;color:var(--blue);font-weight:600}
+.rq-more:hover{text-decoration:underline}
+
+@media(max-width:640px){
+  .rq-note{grid-column:span 1}
+  .rq-guess{width:100%}
+  .rq-more{margin-left:0;width:100%;padding-top:4px}
+}
+/* การ์ดสรุปคิวยืนยันในหน้า AI วิเคราะห์ */
+.rq-teaser{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
