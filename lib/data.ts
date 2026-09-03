@@ -138,16 +138,58 @@ function mapRow(r: any): Voc {
 }
 
 // ---------- ดึงข้อมูลทั้งหมด (Supabase หรือ mock) ----------
+const PAGE = 1000;   // Supabase/PostgREST จำกัดผลลัพธ์ต่อคำขอ (ค่าเริ่มต้น 1000 แถว)
+const MAX_PAGES = 30;  // กันวนไม่รู้จบ (สูงสุด 30,000 แถว)
+
+// เลือกเฉพาะคอลัมน์ที่หน้าเว็บใช้จริง — ไม่ใช้ '*' เพราะจะลากคอลัมน์ที่ไม่ได้ใช้
+// (product_group / status / created_by / created_at) มาด้วย ทำให้ payload ใหญ่ขึ้นฟรี ๆ
+const SELECT_COLS =
+  'id,ref_code,channel_id,source,project_id,journey_stage,raw_text,topic,occurred_at,imported_at,is_imported,owner_dept,' +
+  'analysis(sentiment,sentiment_confidence,sentiment_manual,sentiment_reason,cat_product,cat_sales,priority),' +
+  'project(name,project_type),channel(name)';
+
+function page(from: number) {
+  return supabase!
+    .from('voc_record')
+    .select(SELECT_COLS)
+    .order('occurred_at', { ascending: false })
+    .order('id', { ascending: true })   // ตัวตัดสินลำดับ กันแถวซ้ำ/หายเวลาแบ่งหน้า
+    .range(from, from + PAGE - 1);
+}
+
 async function fetchAll(): Promise<Voc[]> {
-  if (hasSupabase && supabase) {
-    const { data, error } = await supabase
-      .from('voc_record')
-      .select('*, analysis(*), project(name,project_type), channel(name)')
-      .order('occurred_at', { ascending: false });
-    if (error) { console.error('Supabase error:', error.message); return MOCK; }
-    return (data ?? []).map(mapRow);
+  if (!hasSupabase || !supabase) return MOCK;
+
+  // ต้องแบ่งหน้าเสมอ — ถ้ายิงครั้งเดียวจะได้แค่ 1000 แถวแรกเงียบ ๆ ไม่มี error
+  // (ตอนข้อมูลยังน้อยจะไม่เห็นอาการ พอข้อมูลเกินพันแล้วตัวเลขทั้งระบบจะเพี้ยนทันที)
+  //
+  // นับก่อนแล้วยิงทุกหน้า "พร้อมกัน" — ที่ 10,000 แถวคือ 10 คำขอ
+  // ถ้ายิงเรียงทีละหน้าจะกลายเป็นรอ 10 รอบต่อกัน หน้าเว็บหน่วงหลายวินาที
+  const { count, error: cErr } = await supabase
+    .from('voc_record').select('id', { count: 'exact', head: true });
+
+  if (!cErr && count != null) {
+    const pages = Math.min(Math.max(1, Math.ceil(count / PAGE)), MAX_PAGES);
+    const res = await Promise.all(Array.from({ length: pages }, (_, i) => page(i * PAGE)));
+    const out: Voc[] = [];
+    for (const { data, error } of res) {
+      if (error) { console.error('Supabase error:', error.message); return out.length ? out : MOCK; }
+      out.push(...(data ?? []).map(mapRow));
+    }
+    return out;
   }
-  return MOCK;
+
+  // สำรอง: นับไม่ได้ (เช่น policy ไม่ให้ count) → ไล่ทีละหน้าจนหมด
+  console.error('Supabase count error:', cErr?.message);
+  const out: Voc[] = [];
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const { data, error } = await page(i * PAGE);
+    if (error) { console.error('Supabase error:', error.message); return out.length ? out : MOCK; }
+    const batch = data ?? [];
+    out.push(...batch.map(mapRow));
+    if (batch.length < PAGE) break;
+  }
+  return out;
 }
 
 // ---------- API ที่หน้าเว็บเรียกใช้ ----------
