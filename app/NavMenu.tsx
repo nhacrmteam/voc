@@ -11,6 +11,7 @@ const ITEMS: { href: string; label: string; staffOnly?: boolean; adminOnly?: boo
   { href: '/voc', label: '💬 รายการ VOC' },
   { href: '/import', label: '📤 นำเข้าข้อมูล', adminOnly: true },
   { href: '/analyze', label: '🤖 AI วิเคราะห์' },
+  { href: '/review', label: '✋ คิวยืนยันเสียงลูกค้า', staffOnly: true },
   { href: '/prioritize', label: '🎯 จัดลำดับ' },
   { href: '/reports', label: '📄 รายงานข้อมูล' },
   { href: '/admin', label: '⚙️ จัดการระบบ', adminOnly: true },
