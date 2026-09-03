@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
+import TopBadges from './TopBadges';
 import { DEPT_GROUPS } from '../lib/data';
 
 // หน้าที่เข้าได้โดยไม่ต้องล็อกอิน (ยืนยันอีเมล ฯลฯ)
@@ -327,8 +328,9 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   return (
     <>
       {session && (
-        <div style={{ position: 'fixed', top: 10, right: 16, zIndex: 50, display: 'flex', alignItems: 'center', gap: 10,
+        <div style={{ position: 'fixed', top: 10, right: 16, zIndex: 50, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: 'calc(100vw - 32px)',
           background: '#fff', border: '1px solid #e2e8f0', borderRadius: 30, padding: '5px 8px 5px 14px', fontFamily: 'Sarabun,sans-serif', boxShadow: '0 4px 14px rgba(0,0,0,.08)' }}>
+          <TopBadges role={profile.role} />
           <span style={{ fontSize: 12.5 }}>{profile.full_name || session.user.email} · <b style={{ color: '#1f3a93' }}>{ROLE_TH[profile.role] || profile.role}</b></span>
           <button onClick={signOut} style={{ fontSize: 12, border: '1px solid #e2e8f0', background: '#fff', borderRadius: 20, padding: '5px 11px', cursor: 'pointer', fontFamily: 'inherit' }}>ออกจากระบบ</button>
         </div>
