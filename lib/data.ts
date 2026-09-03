@@ -23,6 +23,22 @@ export const CHANNELS = [
 ];
 export const PROJECT_TYPES = ['บ้านเอื้ออาทร', 'เคหะชุมชน', 'เคหะชุมชนและบริการชุมชน'];
 
+// ---------- แหล่งที่มาย่อยของแต่ละช่องทาง ----------
+// เก็บ "ลำดับที่ต้องการให้แสดง" ไว้ที่นี่จุดเดียว — ห้ามเรียงตามลำดับที่เจอในข้อมูล
+// เพราะลำดับจะสลับไปมาตามชุดข้อมูลที่ถูกกรองอยู่ ผู้ใช้จะงงว่าแท็บย้ายที่
+// ช่องทางที่ไม่อยู่ในนี้ = ไม่แยกแหล่งที่มา (source เท่ากับชื่อช่องทาง แท็บจึงไม่ขึ้น)
+export const CHANNEL_SOURCES: Record<string, string[]> = {
+  'Social Media': ['Facebook', 'Line OA'],
+  'Website / Email / DB': ['Website', 'Email', 'Data อื่นๆ'],
+};
+
+/** เรียงรายชื่อแหล่งที่มาตามลำดับที่กำหนดไว้ · ชื่อที่ไม่รู้จักไปต่อท้ายแบบเรียงอักษร */
+export function sortSources(channel: string, list: string[]): string[] {
+  const order = CHANNEL_SOURCES[channel] || [];
+  const rank = (s: string) => { const i = order.indexOf(s); return i < 0 ? order.length : i; };
+  return [...list].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b, 'th'));
+}
+
 // ---------- Customer Journey 6 ขั้น ----------
 // เก็บใน DB เป็นภาษาอังกฤษ (ตาม check constraint) แต่แสดงผลเป็นไทยเสมอ
 export const JOURNEYS = ['Awareness', 'Consideration', 'Purchase', 'Service', 'Loyalty', 'Win Back'] as const;
