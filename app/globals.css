@@ -551,3 +551,24 @@ html[data-theme="dark"] .tb-pending{background:#3d2f10;color:#fcd34d;border-colo
 }
 /* การ์ดสรุปคิวยืนยันในหน้า AI วิเคราะห์ */
 .rq-teaser{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+
+/* ---------- Donut "สัดส่วนตามแหล่งที่มา" — วงกลมกลางการ์ด + คำอธิบายด้านล่าง ---------- */
+.dn-wrap{
+  display:flex; flex-direction:column; align-items:center;
+  gap:14px; width:100%; padding-top:4px;
+}
+.dn-chart{ display:flex; justify-content:center; width:100%; }
+.dn-legend{ width:100%; display:flex; flex-direction:column; gap:2px; }
+.dn-item{
+  display:flex; align-items:center; gap:10px; width:100%;
+  padding:8px 10px; border:1px solid transparent; border-radius:9px;
+  background:transparent; font:inherit; font-size:13.5px; color:var(--ink);
+  cursor:pointer; text-align:left; transition:background .15s, border-color .15s;
+}
+.dn-item:hover{ background:#f3f6fb; border-color:var(--line); }
+.dn-item.on{ background:#f3f6fb; border-color:var(--line); font-weight:700; }
+.dn-item:focus-visible{ outline:2px solid #2e6cf0; outline-offset:1px; }
+.dn-dot{ width:11px; height:11px; border-radius:50%; flex:0 0 11px; }
+.dn-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dn-val{ font-variant-numeric:tabular-nums; color:var(--muted); white-space:nowrap; }
+.dn-val b{ color:var(--ink); font-weight:700; }
