@@ -57,23 +57,24 @@ function Face({ kind, color, size = 72 }: { kind: 'smile' | 'flat' | 'frown'; co
 const PALETTE = ['#2e6cf0', '#16a34a', '#f59e0b', '#8b5cf6', '#0ea5e9'];
 
 // Donut chart (SVG) — สัดส่วนตามแหล่งที่มา
-function Donut({ data, size = 150 }: { data: { label: string; value: number; color: string }[]; size?: number }) {
+function Donut({ data, size = 150, thickness = 9 }: { data: { label: string; value: number; color: string }[]; size?: number; thickness?: number }) {
   const total = data.reduce((a, d) => a + d.value, 0) || 1;
   let acc = 0;
+  // r = 15.915 → เส้นรอบวง = 100 พอดี ทำให้ strokeDasharray ใช้ค่า % ได้ตรง ๆ
   return (
-    <svg viewBox="0 0 42 42" width={size} height={size} aria-hidden="true">
-      <circle cx="21" cy="21" r="15.915" fill="none" stroke="var(--line)" strokeWidth="5" />
+    <svg viewBox="0 0 42 42" width={size} height={size} aria-hidden="true" style={{ display: 'block', overflow: 'visible' }}>
+      <circle cx="21" cy="21" r="15.915" fill="none" stroke="var(--line)" strokeWidth={thickness} />
       {data.map((d, i) => {
         const seg = d.value / total * 100;
         const el = (
-          <circle key={i} cx="21" cy="21" r="15.915" fill="none" stroke={d.color} strokeWidth="5"
+          <circle key={i} cx="21" cy="21" r="15.915" fill="none" stroke={d.color} strokeWidth={thickness}
             strokeDasharray={`${seg} ${100 - seg}`} strokeDashoffset={25 - acc} strokeLinecap="butt" />
         );
         acc += seg;
         return el;
       })}
-      <text x="21" y="20.5" textAnchor="middle" style={{ fontSize: 6, fontWeight: 700, fill: 'var(--ink)' }}>{total}</text>
-      <text x="21" y="26" textAnchor="middle" style={{ fontSize: 2.6, fill: 'var(--muted)' }}>รายการ</text>
+      <text x="21" y="20.6" textAnchor="middle" style={{ fontSize: 6.4, fontWeight: 800, fill: 'var(--ink)' }}>{total.toLocaleString()}</text>
+      <text x="21" y="25.6" textAnchor="middle" style={{ fontSize: 2.8, fill: 'var(--muted)' }}>รายการ</text>
     </svg>
   );
 }
@@ -368,15 +369,19 @@ function ChannelDetail({ rows, allRows, scores, name, period, onBack }: { rows: 
             <div className="card">
               <h3>สัดส่วนตามแหล่งที่มา</h3>
               {sources.length > 1 ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-                  <Donut data={sources.map(([k, v], i) => ({ label: k, value: v, color: PALETTE[i % PALETTE.length] }))} size={140} />
-                  <div style={{ flex: 1, minWidth: 120 }}>
+                <div className="dn-wrap">
+                  <div className="dn-chart">
+                    <Donut data={sources.map(([k, v], i) => ({ label: k, value: v, color: PALETTE[i % PALETTE.length] }))} size={160} thickness={9} />
+                  </div>
+                  <div className="dn-legend">
                     {sources.map(([k, v], i) => (
-                      <div key={k} onClick={() => setSource(k)} title="คลิกเพื่อกรองดูเฉพาะแหล่งนี้"
-                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', cursor: 'pointer', fontSize: 13, fontWeight: source === k ? 700 : 400 }}>
-                        <span><b style={{ color: PALETTE[i % PALETTE.length] }}>●</b> {k}{source === k ? ' ✓' : ''}</span>
-                        <span style={{ fontWeight: 600 }}>{v} ({Math.round(v / srcTotal * 100)}%)</span>
-                      </div>
+                      <button key={k} type="button" onClick={() => setSource(source === k ? 'all' : k)}
+                        title={source === k ? 'คลิกอีกครั้งเพื่อยกเลิกตัวกรอง' : 'คลิกเพื่อกรองดูเฉพาะแหล่งนี้'}
+                        className={'dn-item' + (source === k ? ' on' : '')}>
+                        <span className="dn-dot" style={{ background: PALETTE[i % PALETTE.length] }} />
+                        <span className="dn-name">{k}</span>
+                        <span className="dn-val">{v.toLocaleString()} <b>({Math.round(v / srcTotal * 100)}%)</b></span>
+                      </button>
                     ))}
                   </div>
                 </div>
