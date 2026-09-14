@@ -98,7 +98,13 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     const { error } = await supabase!.auth.signInWithPassword({ email: loginEmail, password: pw });
     if (error) {
       setErr(known ? '🔑 รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่' : 'เข้าสู่ระบบไม่สำเร็จ — อีเมล/รหัสพนักงาน หรือรหัสผ่านไม่ถูกต้อง');
-    } else router.push('/dashboard');   // ล็อกอินสำเร็จ → ไปหน้าภาพรวมเสมอ
+    } else {
+      // ล็อกอินสำเร็จ → ไปหน้าภาพรวมเสมอ
+      // ต้อง refresh() ด้วย เพราะตอนนี้หน้าเว็บดึงข้อมูลฝั่งเซิร์ฟเวอร์ตาม session ใน cookie
+      // ถ้าไม่ล้างแคชของ router ผู้ใช้อาจเห็นหน้าเวอร์ชัน "ยังไม่ล็อกอิน" ที่ค้างอยู่
+      router.push('/dashboard');
+      router.refresh();
+    }
     setBusy(false);
   }
   async function doSignup(e: React.FormEvent) {
@@ -137,15 +143,21 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     if (error) setErr('ตั้งรหัสใหม่ไม่สำเร็จ: ' + error.message);
     else { setMsg('ตั้งรหัสผ่านใหม่เรียบร้อย เข้าสู่ระบบได้เลย'); setMode('login'); setPw(''); setPw2(''); }
   }
-  async function signOut() { await supabase!.auth.signOut(); router.replace('/login'); }
+  async function signOut() {
+    await supabase!.auth.signOut();
+    router.replace('/login');
+    router.refresh();   // ล้างแคชหน้าเว็บที่เซิร์ฟเวอร์เรนเดอร์ไว้ตอนยังล็อกอินอยู่
+  }
 
   // ทำให้ URL ตรงกับสถานะจริง: ยังไม่ล็อกอิน → /login, ล็อกอินแล้วแต่อยู่ /login → /dashboard
   useEffect(() => {
     if (!ready || !supabase) return;
     if (!session && mode !== 'recovery' && !PUBLIC_PATHS.includes(pathname) && pathname !== '/login') {
       router.replace('/login');
+      router.refresh();
     } else if (session && pathname === '/login') {
       router.replace('/dashboard');
+      router.refresh();
     }
   }, [ready, session, mode, pathname]);
 
