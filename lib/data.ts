@@ -1,5 +1,9 @@
-// lib/data.ts — ชั้นข้อมูล: ใช้ Supabase ถ้าตั้งค่า ENV แล้ว, ไม่งั้น fallback เป็น mock
-import { supabase, hasSupabase } from './supabaseClient';
+// lib/data.ts — ชนิดข้อมูล + ค่าคงที่ที่ใช้ร่วมกันทั้ง "ฝั่งเบราว์เซอร์" และ "ฝั่งเซิร์ฟเวอร์"
+//
+// ⚠️ ไฟล์นี้ต้องไม่แตะ Supabase เลย
+//    เพราะ client component (หน้าจอต่าง ๆ) import ค่าคงที่จากไฟล์นี้
+//    ถ้าไฟล์นี้ import ตัวเชื่อมฐานข้อมูลฝั่งเซิร์ฟเวอร์เข้ามา จะถูกรวมเข้าไฟล์ JS ที่ส่งให้เบราว์เซอร์ด้วย
+//    ฟังก์ชันที่อ่าน/เขียนฐานข้อมูลจริงอยู่ที่ lib/dataServer.ts (server-only) แทน
 import { aiSentiment } from './ai';
 
 export type Sentiment = 'Positive' | 'Neutral' | 'Negative';
@@ -107,7 +111,7 @@ export function projectTypeOf(name: string): string {
   return 'เคหะชุมชน';
 }
 const MOCK_PROJECTS = ['บ้านเอื้ออาทร รังสิต คลอง 1', 'เคหะชุมชนดินแดง', 'บ้านเอื้ออาทร บางบัวทอง 1', 'เคหะชุมชนห้วยขวาง', 'เคหะชุมชนและบริการชุมชน ร่มเกล้า'];
-const MOCK: Voc[] = Array.from({ length: 60 }, (_, i) => {
+export const MOCK: Voc[] = Array.from({ length: 60 }, (_, i) => {
   const v = VOICES[i % VOICES.length];
   const ch = pick(CHANNELS, i * 3);
   const prio: Priority = v.sent === 'Negative' ? (i % 3 === 0 ? 'High' : 'Medium') : (i % 4 === 0 ? 'Medium' : 'Low');
@@ -132,119 +136,3 @@ const MOCK: Voc[] = Array.from({ length: 60 }, (_, i) => {
     ...(az => ({ sentConf: az.conf, sentUncertain: az.uncertain, sentManual: false, sentReason: az.reason }))(aiSentiment(v.voice)),
   };
 });
-
-// ---------- แปลงแถวจาก Supabase → รูป Voc ----------
-function one<T>(x: T | T[] | null | undefined): T | undefined { return Array.isArray(x) ? x[0] : (x ?? undefined); }
-function mapRow(r: any): Voc {
-  const a = one<any>(r.analysis) || {};
-  const proj = one<any>(r.project);
-  const chan = one<any>(r.channel);
-  return {
-    id: String(r.id), ref: r.ref_code ?? String(r.id),
-    channel: chan?.name ?? r.channel_id ?? '', source: r.source ?? '',
-    project: proj?.name ?? '', projectType: proj?.project_type ?? '',
-    journey: r.journey_stage ?? '', topic: r.topic ?? '', voice: r.raw_text ?? '',
-    sentiment: (a.sentiment ?? 'Neutral') as Sentiment, priority: (a.priority ?? 'Low') as Priority,
-    owner: r.owner_dept ?? '',
-    occurredAt: r.occurred_at ?? '', importedAt: r.imported_at ?? r.occurred_at ?? '',
-    imported: !!r.is_imported, catProduct: a.cat_product ?? '', catSales: a.cat_sales ?? '',
-    sentConf: a.sentiment_confidence ?? 0, sentUncertain: (a.sentiment_confidence ?? 100) <= 50 && !a.sentiment_manual,
-    sentManual: !!a.sentiment_manual, sentReason: a.sentiment_reason ?? '',
-  };
-}
-
-// ---------- ดึงข้อมูลทั้งหมด (Supabase หรือ mock) ----------
-const PAGE = 1000;   // Supabase/PostgREST จำกัดผลลัพธ์ต่อคำขอ (ค่าเริ่มต้น 1000 แถว)
-const MAX_PAGES = 30;  // กันวนไม่รู้จบ (สูงสุด 30,000 แถว)
-
-// เลือกเฉพาะคอลัมน์ที่หน้าเว็บใช้จริง — ไม่ใช้ '*' เพราะจะลากคอลัมน์ที่ไม่ได้ใช้
-// (product_group / status / created_by / created_at) มาด้วย ทำให้ payload ใหญ่ขึ้นฟรี ๆ
-const SELECT_COLS =
-  'id,ref_code,channel_id,source,project_id,journey_stage,raw_text,topic,occurred_at,imported_at,is_imported,owner_dept,' +
-  'analysis(sentiment,sentiment_confidence,sentiment_manual,sentiment_reason,cat_product,cat_sales,priority),' +
-  'project(name,project_type),channel(name)';
-
-function page(from: number) {
-  return supabase!
-    .from('voc_record')
-    .select(SELECT_COLS)
-    .order('occurred_at', { ascending: false })
-    .order('id', { ascending: true })   // ตัวตัดสินลำดับ กันแถวซ้ำ/หายเวลาแบ่งหน้า
-    .range(from, from + PAGE - 1);
-}
-
-async function fetchAll(): Promise<Voc[]> {
-  if (!hasSupabase || !supabase) return MOCK;
-
-  // ต้องแบ่งหน้าเสมอ — ถ้ายิงครั้งเดียวจะได้แค่ 1000 แถวแรกเงียบ ๆ ไม่มี error
-  // (ตอนข้อมูลยังน้อยจะไม่เห็นอาการ พอข้อมูลเกินพันแล้วตัวเลขทั้งระบบจะเพี้ยนทันที)
-  //
-  // นับก่อนแล้วยิงทุกหน้า "พร้อมกัน" — ที่ 10,000 แถวคือ 10 คำขอ
-  // ถ้ายิงเรียงทีละหน้าจะกลายเป็นรอ 10 รอบต่อกัน หน้าเว็บหน่วงหลายวินาที
-  const { count, error: cErr } = await supabase
-    .from('voc_record').select('id', { count: 'exact', head: true });
-
-  if (!cErr && count != null) {
-    const pages = Math.min(Math.max(1, Math.ceil(count / PAGE)), MAX_PAGES);
-    const res = await Promise.all(Array.from({ length: pages }, (_, i) => page(i * PAGE)));
-    const out: Voc[] = [];
-    for (const { data, error } of res) {
-      if (error) { console.error('Supabase error:', error.message); return out.length ? out : MOCK; }
-      out.push(...(data ?? []).map(mapRow));
-    }
-    return out;
-  }
-
-  // สำรอง: นับไม่ได้ (เช่น policy ไม่ให้ count) → ไล่ทีละหน้าจนหมด
-  console.error('Supabase count error:', cErr?.message);
-  const out: Voc[] = [];
-  for (let i = 0; i < MAX_PAGES; i++) {
-    const { data, error } = await page(i * PAGE);
-    if (error) { console.error('Supabase error:', error.message); return out.length ? out : MOCK; }
-    const batch = data ?? [];
-    out.push(...batch.map(mapRow));
-    if (batch.length < PAGE) break;
-  }
-  return out;
-}
-
-// ---------- API ที่หน้าเว็บเรียกใช้ ----------
-export async function listVOC(opts: { q?: string; channel?: string; ptype?: string; proj?: string; limit?: number } = {}): Promise<Voc[]> {
-  let r = await fetchAll();
-  if (opts.channel) r = r.filter(x => x.channel === opts.channel);
-  if (opts.ptype) r = r.filter(x => x.projectType === opts.ptype);
-  if (opts.proj) r = r.filter(x => x.project === opts.proj);
-  if (opts.q) { const q = opts.q.toLowerCase(); r = r.filter(x => (x.voice + x.topic + x.ref + x.owner + x.project).toLowerCase().includes(q)); }
-  return r.slice(0, opts.limit ?? r.length);
-}
-// รายชื่อโครงการ (distinct) พร้อมประเภท — ใช้ทำ cascade filter
-export async function listProjects(): Promise<{ name: string; type: string }[]> {
-  const all = await fetchAll();
-  const m = new Map<string, string>();
-  all.forEach(x => { if (x.project && !m.has(x.project)) m.set(x.project, x.projectType || projectTypeOf(x.project)); });
-  return Array.from(m, ([name, type]) => ({ name, type })).sort((a, b) => a.name.localeCompare(b.name, 'th'));
-}
-export async function getVOC(id: string): Promise<Voc | undefined> {
-  return (await fetchAll()).find(x => x.id === id);
-}
-
-export async function sentimentStats() {
-  const all = await fetchAll(); const t = all.length || 1;
-  const c = { Positive: 0, Neutral: 0, Negative: 0 };
-  all.forEach(x => c[x.sentiment]++);
-  return { total: all.length, ...c, posPct: Math.round(c.Positive / t * 100), negPct: Math.round(c.Negative / t * 100), neuPct: Math.round(c.Neutral / t * 100) };
-}
-export async function channelStats() {
-  const all = await fetchAll();
-  return CHANNELS.map(name => {
-    const rows = all.filter(x => x.channel === name);
-    const t = rows.length || 1;
-    const pos = rows.filter(x => x.sentiment === 'Positive').length;
-    const neu = rows.filter(x => x.sentiment === 'Neutral').length;
-    const neg = rows.filter(x => x.sentiment === 'Negative').length;
-    return {
-      name, count: rows.length,
-      posPct: Math.round(pos / t * 100), neuPct: Math.round(neu / t * 100), negPct: Math.round(neg / t * 100),
-    };
-  });
-}
