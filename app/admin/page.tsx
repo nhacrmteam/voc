@@ -225,7 +225,7 @@ export default function AdminPage() {
 
         {/* ตั้งค่า AI / LLM */}
         <div className="card">
-          <h3>🧠 ตั้งค่า AI วิเคราะห์ (LLM จริง)</h3>
+          <h3>🧠 ตั้งค่า AI วิเคราะห์เสียงลูกค้า (LLM จริง)</h3>
           <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.8 }}>
             ระบบวิเคราะห์เสียงลูกค้าด้วย LLM จริงผ่าน Edge Function <code>analyze-voc</code> — ถ้า LLM ใช้ไม่ได้จะสลับไปใช้ rule-based (keyword) ให้อัตโนมัติ ข้อมูลไม่หาย<br />
             ตั้ง Secrets ที่ Supabase → Edge Functions → Secrets: <code>LLM_API_KEY</code> (จำเป็น) · <code>LLM_BASE_URL</code> · <code>LLM_MODEL</code>
@@ -251,7 +251,7 @@ export default function AdminPage() {
             </div>
           )}
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, lineHeight: 1.7 }}>
-            ใช้ที่ไหนบ้าง: หน้า <b>นำเข้าข้อมูล</b> (ติ๊ก &ldquo;วิเคราะห์ด้วย LLM จริง&rdquo;) · <b>API เรียลไทม์</b> (ingest-voc เรียกให้อัตโนมัติ) · หน้า <b>AI วิเคราะห์</b> (ปุ่มวิเคราะห์ใหม่ด้วย LLM)<br />
+            ใช้ที่ไหนบ้าง: หน้า <b>นำเข้าข้อมูล</b> (ติ๊ก &ldquo;วิเคราะห์ด้วย LLM จริง&rdquo;) · <b>API เรียลไทม์</b> (ingest-voc เรียกให้อัตโนมัติ) · หน้า <b>AI วิเคราะห์เสียงลูกค้า</b> (ปุ่มวิเคราะห์ใหม่ด้วย LLM)<br />
             ต้องรัน <b>supabase_llm_engine.sql</b> ก่อน เพื่อให้ระบบบันทึกได้ว่าแต่ละรายการวิเคราะห์ด้วย LLM หรือ rule · ขั้นตอนละเอียดอยู่ในไฟล์ <b>ตั้งค่า_LLM_วิเคราะห์.md</b>
           </div>
         </div>
