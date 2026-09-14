@@ -10,6 +10,7 @@ const ITEMS: { href: string; label: string; staffOnly?: boolean; adminOnly?: boo
   { href: '/channels', label: '📥 8 ช่องทางรับฟังเสียงลูกค้า' },
   { href: '/voc', label: '💬 รายการ VOC' },
   { href: '/import', label: '📤 นำเข้าข้อมูล', adminOnly: true },
+  { href: '/dimensions', label: '🧭 วิเคราะห์ 4 มิติ' },
   { href: '/analyze', label: '🤖 AI วิเคราะห์' },
   { href: '/review', label: '✋ คิวยืนยันเสียงลูกค้า', staffOnly: true },
   { href: '/prioritize', label: '🎯 จัดลำดับ' },
