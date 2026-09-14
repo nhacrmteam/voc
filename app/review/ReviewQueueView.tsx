@@ -143,7 +143,7 @@ export default function ReviewQueueView() {
   return (
     <>
       <header className="top">
-        <h1>✋ คิวยืนยันเสียงลูกค้า</h1>
+        <h1>✋ คิวรอยืนยันเสียงลูกค้า</h1>
         <div className="sub">
           รายการที่ AI ไม่มั่นใจ (ความเชื่อมั่น ≤ 50%) — เจ้าหน้าที่ตรวจและยืนยันก่อนนำไปใช้คิดสถิติ
         </div>
@@ -178,7 +178,7 @@ export default function ReviewQueueView() {
             รายการที่ยืนยันแล้วจะถูกล็อกเป็น <b>ยืนยันโดยเจ้าหน้าที่</b> และ
             <b> ไม่ถูกทับ</b> เมื่อสั่งวิเคราะห์ใหม่ด้วย LLM ในภายหลัง
             <div style={{ marginTop: 8 }}>
-              <Link href="/analyze" className="rq-link">← กลับหน้า AI วิเคราะห์</Link>
+              <Link href="/analyze" className="rq-link">← กลับหน้า AI วิเคราะห์เสียงลูกค้า</Link>
             </div>
           </div>
         </div>
@@ -213,7 +213,7 @@ export default function ReviewQueueView() {
             {total === 0 && !hasFilter
               ? <EmptyState icon="🎉" title="เคลียร์คิวหมดแล้ว"
                   detail={<>ไม่มีรายการที่ AI ไม่มั่นใจรอยืนยันในขณะนี้ — เมื่อมีข้อมูลใหม่เข้ามาและ AI ตัดสินไม่ได้ รายการจะมาโผล่ที่นี่</>}
-                  actions={<Link className="btn" href="/analyze">ไปหน้า AI วิเคราะห์</Link>} />
+                  actions={<Link className="btn" href="/analyze">ไปหน้า AI วิเคราะห์เสียงลูกค้า</Link>} />
               : <EmptyState title="ไม่พบรายการตามตัวกรองนี้"
                   detail={<>ลองเลือก &ldquo;ทุกช่องทาง&rdquo; หรือลบคำค้นออก</>}
                   actions={<button className="btn" onClick={() => { setCh('all'); setQ(''); }}>ล้างตัวกรอง</button>} />}
