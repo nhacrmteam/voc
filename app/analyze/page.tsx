@@ -71,7 +71,7 @@ export default async function Analyze() {
             เดิมแปะรายการ 20 อันไว้ตรงนี้ ทำให้หน้านี้ยาวและทำงานต่อไม่ได้จริง */}
         <div className="card rq-teaser">
           <div>
-            <h3 style={{ marginBottom: 4 }}>✋ คิวยืนยันเสียงลูกค้า</h3>
+            <h3 style={{ marginBottom: 4 }}>✋ คิวรอยืนยันเสียงลูกค้า</h3>
             <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>
               รายการที่ AI ไม่มั่นใจ (ความเชื่อมั่น ≤ 50%) รอเจ้าหน้าที่ตรวจและยืนยัน<br />
               ยืนยันแล้วจะถูกล็อก ไม่ถูกทับเมื่อสั่งวิเคราะห์ใหม่ด้วย LLM
@@ -82,7 +82,7 @@ export default async function Analyze() {
               {pendingReview.toLocaleString()}
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>รายการรอยืนยัน</div>
-            <Link href="/review" className="btn">เปิดคิวยืนยัน →</Link>
+            <Link href="/review" className="btn">เปิดคิวรอยืนยัน →</Link>
           </div>
         </div>
 
