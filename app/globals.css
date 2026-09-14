@@ -572,3 +572,142 @@ html[data-theme="dark"] .tb-pending{background:#3d2f10;color:#fcd34d;border-colo
 .dn-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .dn-val{ font-variant-numeric:tabular-nums; color:var(--muted); white-space:nowrap; }
 .dn-val b{ color:var(--ink); font-weight:700; }
+
+/* ============================================================
+   วิเคราะห์ 4 มิติ (/dimensions)
+   ============================================================ */
+.dim-note{font-size:12.5px;color:var(--muted);line-height:1.75;margin:-4px 0 10px}
+.dim-mut{color:var(--muted)}
+.dim-badge{display:inline-block;margin-left:8px;padding:1px 9px;border-radius:20px;color:#fff;font-size:11.5px;font-weight:700;vertical-align:middle}
+
+/* ---- การ์ด 4 มิติ (เป็นแท็บด้วย) ---- */
+.dim-tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-bottom:18px}
+.dim-tab{position:relative;text-align:left;font:inherit;color:inherit;cursor:pointer;
+  background:var(--card,#fff);border:1px solid var(--line);border-top:4px solid var(--dc,#2e6cf0);
+  border-radius:13px;padding:13px 15px;transition:box-shadow .15s,transform .15s}
+.dim-tab:hover{box-shadow:0 6px 18px rgba(15,23,42,.09);transform:translateY(-2px)}
+.dim-tab.on{background:color-mix(in srgb,var(--dc) 8%,transparent);border-color:var(--dc);box-shadow:0 0 0 2px color-mix(in srgb,var(--dc) 28%,transparent)}
+.dim-tab:focus-visible{outline:2px solid var(--dc);outline-offset:2px}
+.dim-tab-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.dim-tab-no{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--dc);color:#fff;font-size:12px;font-weight:800}
+.dim-tab-icon{font-size:20px}
+.dim-tab-name{font-size:14.5px;font-weight:700;line-height:1.35}
+.dim-tab-en{font-size:11.5px;color:var(--muted);margin-bottom:5px}
+.dim-tab-sub{font-size:12px;color:var(--muted);line-height:1.6;min-height:38px}
+.dim-tab-top1{margin-top:8px;padding-top:7px;border-top:1px dashed var(--line);font-size:12px;color:var(--muted)}
+.dim-tab-top1 b{color:var(--ink)}
+
+/* ---- แถบอารมณ์ 3 สี ---- */
+.dim-sent{display:flex;width:100%;border-radius:99px;overflow:hidden;background:#eef2f7}
+.dim-sent i{display:block;height:100%}
+
+/* ---- แถวหมวด ---- */
+.dim-row{display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;
+  background:transparent;border:1px solid transparent;border-radius:10px;padding:8px 10px;margin:2px 0;
+  transition:background .15s,border-color .15s}
+.dim-row:hover{background:#f3f6fb;border-color:var(--line)}
+.dim-row.on{background:#f3f6fb;border-color:var(--line);box-shadow:inset 3px 0 0 #1f3a93}
+.dim-row:focus-visible{outline:2px solid #2e6cf0;outline-offset:1px}
+.dim-row-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px;margin-bottom:4px}
+.dim-row-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dim-row-num{font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+.dim-row-num span{font-weight:400;color:var(--muted)}
+.dim-track{height:8px;background:#eef2f7;border-radius:6px;overflow:hidden}
+.dim-track i{display:block;height:100%;border-radius:6px}
+.dim-row-foot{display:flex;align-items:center;gap:9px;margin-top:6px;font-size:11.5px;color:var(--muted)}
+.dim-row-foot .dim-sent{flex:1;min-width:60px;max-width:160px}
+.dim-neg{white-space:nowrap}
+.dim-neg.hot{color:#dc2626;font-weight:700}
+.dim-hi{white-space:nowrap;background:#fef3c7;color:#b45309;border-radius:20px;padding:1px 8px;font-weight:600}
+.dim-row-desc{font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:5px}
+
+/* ---- แถบวงจรชีวิต 6 ขั้น ---- */
+.dim-flow{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.dim-step{display:flex;flex-direction:column;align-items:center;gap:2px;font:inherit;cursor:pointer;
+  border:1px solid transparent;border-radius:12px;padding:11px 7px;transition:transform .15s,box-shadow .15s}
+.dim-step:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(15,23,42,.1)}
+.dim-step.on{box-shadow:0 0 0 2px currentColor inset}
+.dim-step:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+.dim-step-no{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;
+  background:rgba(255,255,255,.72);font-size:11px;font-weight:800;margin-bottom:2px}
+.dim-step-th{font-size:12.5px;font-weight:700;text-align:center;line-height:1.35}
+.dim-step-en{font-size:10.5px;opacity:.75}
+.dim-step-n{font-size:19px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}
+.dim-step-pct{font-size:11px;opacity:.8;margin-bottom:5px}
+.dim-step .dim-sent{background:rgba(0,0,0,.12)}
+
+/* ---- ตาราง ---- */
+.dim-tablewrap{overflow-x:auto}
+.dim-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.dim-table th,.dim-table td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.dim-table thead th{font-size:11.5px;color:var(--muted);font-weight:700;white-space:nowrap;background:var(--card,#fff)}
+.dim-table .r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dim-table tbody tr{cursor:pointer}
+.dim-table tbody tr:hover{background:#f3f6fb}
+.dim-table tbody tr.on{background:#eef4ff;box-shadow:inset 3px 0 0 #1f3a93}
+.dim-picked .dim-voice{max-width:420px;color:var(--muted);line-height:1.6}
+.dim-pill{display:inline-block;padding:1px 9px;border-radius:20px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.dim-pill.pos{background:#dcfce7;color:#15803d}
+.dim-pill.neu{background:#fef3c7;color:#b45309}
+.dim-pill.neg{background:#fee2e2;color:#b91c1c}
+.dim-picked-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+
+/* ---- กริดมิติ 2 / 3 ---- */
+.dim-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.dim-grid2{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px}
+
+/* ---- จุดที่ต้องปรับปรุงเร่งด่วน ---- */
+.dim-pain{display:flex;align-items:center;gap:11px;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;
+  background:transparent;border:1px solid var(--line);border-radius:11px;padding:10px 12px;margin:7px 0;transition:background .15s}
+.dim-pain:hover{background:#f3f6fb}
+.dim-pain.on{background:#eef4ff;border-color:#1f3a93}
+.dim-pain:focus-visible{outline:2px solid #2e6cf0;outline-offset:1px}
+.dim-pain-no{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;color:#fff;font-weight:800;font-size:13px;flex:0 0 26px}
+.dim-pain-body{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.dim-pain-name{font-size:13px;font-weight:700}
+.dim-pain-body .dim-mut{font-size:11.5px}
+
+/* ---- กลุ่มลูกค้า (มิติ 4) ---- */
+.dim-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.dim-gcard{display:flex;flex-direction:column;align-items:center;gap:3px;font:inherit;color:inherit;cursor:pointer;
+  background:var(--card,#fff);border:1px solid var(--line);border-bottom:4px solid var(--gc,#2e6cf0);
+  border-radius:12px;padding:13px 10px;transition:transform .15s,box-shadow .15s}
+.dim-gcard:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(15,23,42,.1)}
+.dim-gcard.on{background:color-mix(in srgb,var(--gc) 9%,transparent);border-color:var(--gc);box-shadow:0 0 0 2px color-mix(in srgb,var(--gc) 30%,transparent)}
+.dim-gcard:focus-visible{outline:2px solid var(--gc);outline-offset:2px}
+.dim-gicon{font-size:22px}
+.dim-gname{font-size:13.5px;font-weight:700;text-align:center}
+.dim-gn{font-size:22px;font-weight:800;color:var(--gc);font-variant-numeric:tabular-nums}
+.dim-gcard .dim-mut{font-size:11.5px}
+.dim-gcard .dim-sent{margin-top:6px}
+
+.dim-gdetail{border-top:4px solid var(--gc,#2e6cf0)}
+.dim-stages{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:4px}
+.dim-stage{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#f8fafc}
+.dim-stage-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:7px}
+.dim-stage-title{font-size:13.5px;font-weight:700}
+.dim-stage-n{font:inherit;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--line);
+  background:var(--card,#fff);color:inherit;border-radius:20px;padding:3px 11px;white-space:nowrap}
+.dim-stage-n:hover{background:#eef4ff;border-color:#1f3a93}
+.dim-who{font-size:12.5px;color:var(--muted);margin-bottom:9px}
+.dim-who b{color:var(--ink)}
+.dim-act-t{font-size:11.5px;font-weight:800;color:var(--muted);letter-spacing:.02em;margin-bottom:5px}
+.dim-acts{margin:0;padding-left:18px;font-size:12.5px;line-height:1.85}
+.dim-acts li{margin-bottom:2px}
+.dim-gfoot{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)}
+.dim-toplist{list-style:none;margin:0;padding:0}
+.dim-toplist li{display:flex;justify-content:space-between;gap:10px;align-items:baseline;
+  padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.dim-toplist li:last-child{border-bottom:none}
+.dim-toplist li span{min-width:0}
+.dim-toplist li b{white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* ---- จอแคบ ---- */
+@media(max-width:900px){
+  .dim-grid2{grid-template-columns:1fr}
+  .dim-flow{grid-template-columns:repeat(3,1fr)}
+}
+@media(max-width:560px){
+  .dim-flow{grid-template-columns:repeat(2,1fr)}
+  .dim-picked .dim-voice{max-width:200px}
+}
