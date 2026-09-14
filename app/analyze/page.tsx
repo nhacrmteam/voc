@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { listVOC, sentimentStats, JOURNEYS, JOURNEY_TH, JOURNEY_DESC } from '../../lib/data';
+import { JOURNEYS, JOURNEY_TH, JOURNEY_DESC } from '../../lib/data';
+import { listVOC, sentimentStats, requireUser } from '../../lib/dataServer';
 import ReanalyzePanel from './ReanalyzePanel';
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +35,7 @@ function BarList({ title, note, data, total, color }: { title: string; note?: st
 }
 
 export default async function Analyze() {
+  await requireUser();   // ด่านตรวจสิทธิ์ — ต้องมาก่อนดึงข้อมูลเสมอ
   const rows = await listVOC();
   const s = await sentimentStats();
   const total = rows.length || 1;

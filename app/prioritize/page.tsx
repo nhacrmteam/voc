@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import EmptyState from '../components/EmptyState';
 import { vocHref, ALL_TIME } from '../../lib/vocLink';
-import { listVOC } from '../../lib/data';
+import { listVOC, requireUser } from '../../lib/dataServer';
 import { W, SW, FACTORS, STRENGTH_FACTORS, scoreTopics, scoreBand, scoreStrengths, strengthBand } from '../../lib/priority';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Prioritize() {
+  await requireUser();   // ด่านตรวจสิทธิ์ — ต้องมาก่อนดึงข้อมูลเสมอ
   const rows = await listVOC();
   const top10 = Array.from(scoreTopics(rows).values()).sort((a, b) => b.score - a.score).slice(0, 10);
   const strengths = scoreStrengths(rows).slice(0, 10);

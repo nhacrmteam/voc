@@ -1,4 +1,4 @@
-import { listVOC } from '../../lib/data';
+import { listVOC, requireUser } from '../../lib/dataServer';
 import VocListView from './VocListView';
 
 export const dynamic = 'force-dynamic';
@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 export default async function VocList({ searchParams }: {
   searchParams: { q?: string; fy?: string; qt?: string };
 }) {
+  await requireUser();   // ด่านตรวจสิทธิ์ — ต้องมาก่อนดึงข้อมูลเสมอ
   const rows = await listVOC({});
   const q = searchParams?.q || '';
   const fy = searchParams?.fy;

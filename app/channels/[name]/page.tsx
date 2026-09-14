@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { listVOC, CHANNELS, JOURNEY_TH, JOURNEY_COLOR, journeyLabel } from '../../../lib/data';
+import { CHANNELS, JOURNEY_TH, JOURNEY_COLOR, journeyLabel } from '../../../lib/data';
+import { listVOC, requireUser } from '../../../lib/dataServer';
 import { scoreTopics, scoreBand } from '../../../lib/priority';
 import { computeCloud } from '../../../lib/cloud';
 import WordCloud from '../../components/WordCloud';
@@ -12,6 +13,7 @@ const SENT_TH: Record<string, string> = { Positive: 'เชิงบวก', Neu
 const SENT_COLOR: Record<string, string> = { Positive: '#16a34a', Neutral: '#64748b', Negative: '#dc2626' };
 
 export default async function ChannelDetail({ params }: { params: { name: string } }) {
+  await requireUser();   // ด่านตรวจสิทธิ์ — ต้องมาก่อนดึงข้อมูลเสมอ
   const name = decodeURIComponent(params.name);
   const known = CHANNELS.includes(name);
   const rows = known ? await listVOC({ channel: name }) : [];

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { getVOC, listVOC } from '../../../lib/data';
+import { getVOC, listVOC, requireUser } from '../../../lib/dataServer';
 import { notFound } from 'next/navigation';
 import VocDetailBody from '../VocDetailBody';
 
@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 // หน้าเต็มยังอยู่เหมือนเดิมเพื่อ deep link / คัดลอกลิงก์ส่งต่อ / เปิดแท็บใหม่
 // แต่เนื้อหาใช้ VocDetailBody ชุดเดียวกับป๊อปอัป — แก้ที่เดียวเห็นตรงกันทั้งสองที่
 export default async function VocDetail({ params }: { params: { id: string } }) {
+  await requireUser();   // ด่านตรวจสิทธิ์ — ต้องมาก่อนดึงข้อมูลเสมอ
   const r = await getVOC(params.id);
   if (!r) return notFound();
   const all = await listVOC({});
