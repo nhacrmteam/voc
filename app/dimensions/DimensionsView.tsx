@@ -307,7 +307,7 @@ export default function DimensionsView({ rows }: { rows: Voc[] }) {
                   <div className="card">
                     <h3><span style={{ marginRight: 6 }}>🗂️</span>ยังจัดหมวดไม่ได้</h3>
                     <CatRow b={byKey(d2, DIM2_OTHER)} total={total} color="#94a3b8"
-                      desc="เสียงที่ AI ยังจับหมวดผลิตภัณฑ์ไม่ได้ — ถ้าตัวเลขนี้สูง ควรสั่งวิเคราะห์ใหม่ด้วย LLM ที่หน้า AI วิเคราะห์"
+                      desc="เสียงที่ AI ยังจับหมวดผลิตภัณฑ์ไม่ได้ — ถ้าตัวเลขนี้สูง ควรสั่งวิเคราะห์ใหม่ด้วย LLM ที่หน้า AI วิเคราะห์เสียงลูกค้า"
                       active={pick === DIM2_OTHER} onPick={() => setPick(pick === DIM2_OTHER ? '' : DIM2_OTHER)} />
                   </div>
                 </div>
