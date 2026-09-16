@@ -16,6 +16,8 @@ const ITEMS: { href: string; label: string; staffOnly?: boolean; adminOnly?: boo
   { href: '/prioritize', label: '🎯 จัดลำดับ' },
   { href: '/reports', label: '📄 รายงานข้อมูล' },
   { href: '/admin', label: '⚙️ จัดการระบบ', adminOnly: true },
+  // คู่มือต้องอยู่ล่างสุดและ **ทุกบทบาทเห็น** — คนที่เข้าเมนูอื่นไม่ได้ ยิ่งต้องอ่านคู่มือได้
+  { href: '/help', label: '📘 คู่มือการใช้งาน' },
 ];
 
 export default function NavMenu() {
