@@ -827,3 +827,107 @@ html[data-theme="dark"] .tb-pending{background:#3d2f10;color:#fcd34d;border-colo
   .rp-bar{gap:14px}
   .rp-doc-meta{text-align:left}
 }
+
+/* ============================================================
+   คู่มือการใช้งาน (/help)
+   ============================================================ */
+.hp-roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-bottom:18px}
+.hp-role{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;
+  font:inherit;color:inherit;cursor:pointer;background:var(--card,#fff);border:1px solid var(--line);
+  border-left:5px solid var(--rc,#2e6cf0);border-radius:13px;padding:16px 18px;
+  transition:transform .15s,box-shadow .15s,background .15s}
+.hp-role:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(15,23,42,.1)}
+.hp-role.on{background:color-mix(in srgb,var(--rc) 8%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,var(--rc) 35%,transparent)}
+.hp-role:focus-visible{outline:2px solid var(--rc);outline-offset:2px}
+.hp-role-ic{font-size:30px;line-height:1.1}
+.hp-role-name{font-size:16px;font-weight:800}
+.hp-role-short{font-size:12.5px;color:var(--muted);line-height:1.6}
+.hp-mine{position:absolute;top:10px;right:10px;font-size:10.5px;font-weight:700;color:#fff;
+  background:var(--rc,#2e6cf0);border-radius:20px;padding:2px 9px}
+
+/* ---- สรุปสิทธิ์ ---- */
+.hp-perm{border-top:4px solid var(--rc,#2e6cf0)}
+.hp-perm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;margin-top:6px}
+.hp-perm-h{font-size:12.5px;font-weight:800;margin-bottom:4px}
+.hp-perm-h.ok{color:#15803d}
+.hp-perm-h.no{color:#b91c1c}
+.hp-perm ul{margin:0;padding-left:19px}
+.hp-perm li{font-size:13px;line-height:1.85;margin-bottom:3px}
+
+/* ---- แถบค้นหา ---- */
+.hp-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.hp-search{flex:1 1 300px;padding:9px 13px;border:1px solid var(--line);border-radius:10px;
+  font-size:13.5px;font-family:inherit;background:var(--card,#fff);color:inherit}
+.hp-search:focus{outline:2px solid #2e6cf0;outline-offset:-1px}
+.hp-mini{font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;background:var(--card,#fff);
+  color:inherit;border:1px solid var(--line);border-radius:9px;padding:8px 13px}
+.hp-mini:hover{border-color:#1f3a93;color:#1f3a93}
+.hp-mini:focus-visible{outline:2px solid #2e6cf0;outline-offset:2px}
+.hp-mini.pr{background:#1f3a93;border-color:#1f3a93;color:#fff}
+
+/* ---- กลุ่มงาน ---- */
+.hp-group h3{font-size:15px;margin-bottom:4px}
+.hp-fnote{font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:10px}
+
+/* ---- การ์ดงาน ---- */
+.hp-task{border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin-bottom:10px;
+  background:#f8fafc;transition:border-color .15s,background .15s}
+.hp-task:hover{border-color:#c7d2fe}
+.hp-task.on{background:var(--card,#fff);border-color:#1f3a93}
+.hp-task-head{display:flex;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;
+  background:none;border:none;padding:0;cursor:pointer;color:inherit}
+.hp-task-head:focus-visible{outline:2px solid #2e6cf0;outline-offset:3px;border-radius:6px}
+.hp-task-title{font-size:14px;font-weight:700;flex:1;min-width:0}
+.hp-min{font-size:11px;color:var(--muted);white-space:nowrap;background:#eef2f7;border-radius:20px;padding:2px 9px}
+.hp-caret{font-size:19px;font-weight:700;color:#1f3a93;width:20px;text-align:center;flex:0 0 20px}
+.hp-why{font-size:12.5px;color:var(--muted);line-height:1.7;margin-top:3px;padding-right:30px}
+
+.hp-body{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+.hp-where{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:12px}
+.hp-where-l{font-size:11px;font-weight:700;color:var(--muted)}
+.hp-menu{font-size:12.5px;font-weight:700;background:#eef2ff;color:#1f3a93;border-radius:8px;padding:4px 11px}
+.hp-go{font-size:12.5px;font-weight:700;color:var(--blue)}
+.hp-go:hover{text-decoration:underline}
+
+.hp-steps{margin:0;padding-left:22px}
+.hp-steps li{font-size:13.5px;line-height:1.9;margin-bottom:9px}
+.hp-steps li::marker{font-weight:800;color:#1f3a93}
+.hp-tip{font-size:12.5px;color:var(--muted);line-height:1.75;background:#f1f5f9;
+  border-left:3px solid #94a3b8;border-radius:0 7px 7px 0;padding:6px 11px;margin-top:5px}
+.hp-notes{margin-top:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 14px}
+.hp-notes-h{font-size:12.5px;font-weight:800;color:#92400e;margin-bottom:3px}
+.hp-notes ul{margin:0;padding-left:18px}
+.hp-notes li{font-size:12.5px;line-height:1.85;color:#78350f;margin-bottom:4px}
+
+/* ---- คำศัพท์ ---- */
+.hp-gloss{margin:0}
+.hp-gloss>div{padding:9px 0;border-bottom:1px solid var(--line)}
+.hp-gloss>div:last-child{border-bottom:none}
+.hp-gloss dt{font-size:13.5px;font-weight:700;color:#1f3a93;margin-bottom:2px}
+.hp-gloss dd{margin:0;font-size:13px;line-height:1.85;color:var(--ink)}
+
+/* ---- คำถามที่พบบ่อย ---- */
+.hp-faq{border:1px solid var(--line);border-radius:10px;padding:2px 14px;margin-bottom:8px;background:#f8fafc}
+.hp-faq summary{cursor:pointer;font-size:13.5px;font-weight:600;padding:9px 0;list-style:none;display:flex;align-items:center;gap:8px}
+.hp-faq summary::-webkit-details-marker{display:none}
+.hp-faq summary::before{content:'?';display:grid;place-items:center;width:20px;height:20px;flex:0 0 20px;
+  border-radius:50%;background:#eef2ff;color:#1f3a93;font-size:12px;font-weight:800}
+.hp-faq[open] summary{color:#1f3a93}
+.hp-faq summary:focus-visible{outline:2px solid #2e6cf0;outline-offset:2px;border-radius:6px}
+.hp-faq>div{font-size:13px;line-height:1.9;padding:0 0 11px 28px;color:var(--muted)}
+.hp-faq>div b{color:var(--ink)}
+
+.hp-start .hp-steps li{margin-bottom:11px}
+.hp-foot{font-size:13px;color:var(--muted);line-height:1.8}
+.hp-link{font:inherit;font-size:13px;font-weight:700;color:var(--blue);background:none;border:none;padding:0;cursor:pointer}
+.hp-link:hover{text-decoration:underline}
+
+/* ---- พิมพ์คู่มือ: ซ่อนสิ่งที่ไม่ต้องอยู่บนกระดาษ แล้วกางทุกหัวข้อ ---- */
+@media print{
+  .side,.hp-roles,.hp-bar,.hp-go,.tb-wrap{display:none!important}
+  .main{filter:none!important}
+  .card{break-inside:avoid;border:1px solid #cbd5e1}
+  .hp-task{background:#fff;break-inside:avoid}
+  .hp-faq{background:#fff}
+  .hp-faq>div{display:block!important}
+}
