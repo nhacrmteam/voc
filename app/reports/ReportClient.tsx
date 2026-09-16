@@ -1,13 +1,20 @@
 'use client';
-// ReportClient — ศูนย์รายงานหลายประเภท พร้อมตัวกรอง (ปีงบ/ไตรมาส/ประเภท/โครงการ)
-// แต่ละรายงานดาวน์โหลด CSV / Excel / PDF (พิมพ์) ได้ · อิงข้อมูลตามตัวกรองปัจจุบัน
+// ReportClient — ศูนย์รายงาน
+//
+// ปัญหาเดิม: หน้านี้เป็นการ์ดปุ่มดาวน์โหลด 11 ใบ กดแล้วได้ตารางดิบ
+//   ดูก่อนโหลดไม่ได้ว่าข้างในมีอะไร · ไม่มีบทสรุป · ไม่มีกราฟ · ไฟล์ Excel เป็น HTML เปลี่ยนนามสกุล
+//   ผู้ใช้จึงต้องมาตีความตัวเลขเองทุกครั้ง = เอาไปใช้ต่อจริงไม่ได้
+//
+// ตอนนี้: เลือกรายงาน → เห็นเอกสารเต็มบนหน้าเว็บทันที (ตัวชี้วัด · บทสรุปเป็นประโยค · กราฟ · ตาราง)
+//   แล้วค่อยเลือกส่งออก 5 แบบ ตามลักษณะการใช้งาน — CSV · Excel · PDF ทางการ · อินโฟกราฟิก PNG/PDF
 import { useEffect, useMemo, useState } from 'react';
 import type { Voc } from '../../lib/data';
 import { PROJECT_TYPES } from '../../lib/data';
-import { scoreStrengths, strengthBand } from '../../lib/priority';
+import { buildExec, buildChannel, buildWatch, buildStrength, plainReports, type ReportDoc } from '../../lib/report';
+import { buildInfographicSvg, type InfoMeta } from '../../lib/reportInfographic';
+import { exportCSV, exportXLSX, exportPDFDoc, exportInfographicPNG, exportInfographicPDF } from './exportKit';
 import EmptyState from '../components/EmptyState';
 
-const SENT_TH: Record<string, string> = { Positive: 'เชิงบวก', Neutral: 'เป็นกลาง', Negative: 'เชิงลบ' };
 const QUARTERS = [
   { k: 'year', label: 'ทั้งปี (สะสม)' }, { k: 'q1', label: 'ไตรมาส 1 (ต.ค.–ธ.ค.)' }, { k: 'q2', label: 'ไตรมาส 2 (ม.ค.–มี.ค.)' },
   { k: 'q3', label: 'ไตรมาส 3 (เม.ย.–มิ.ย.)' }, { k: 'q4', label: 'ไตรมาส 4 (ก.ค.–ก.ย.)' },
@@ -18,38 +25,23 @@ function periodRange(be: number, q: string) {
   const m: Record<string, [string, string]> = { q1: [`${s}-10-01`, `${s}-12-31`], q2: [`${e}-01-01`, `${e}-03-31`], q3: [`${e}-04-01`, `${e}-06-30`], q4: [`${e}-07-01`, `${e}-09-30`], year: [`${s}-10-01`, `${e}-09-30`] };
   const [from, to] = m[q] || m.year; return { from, to };
 }
-const pct = (n: number, t: number) => (t ? Math.round(n / t * 100) : 0) + '%';
-
-type Table = { cols: string[]; rows: (string | number)[][] };
-function csvCell(v: string | number) { return '"' + String(v ?? '').replace(/"/g, '""') + '"'; }
-function download(name: string, content: string, mime: string) {
-  const blob = new Blob(['﻿' + content], { type: mime });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href);
-}
-function toCSV(name: string, t: Table) {
-  download(name + '.csv', [t.cols.map(csvCell).join(','), ...t.rows.map(r => r.map(csvCell).join(','))].join('\n'), 'text/csv;charset=utf-8;');
-}
-function toExcel(name: string, t: Table) {
-  const th = t.cols.map(c => `<th>${c}</th>`).join('');
-  const tr = t.rows.map(r => '<tr>' + r.map(c => `<td>${String(c ?? '')}</td>`).join('') + '</tr>').join('');
-  download(name + '.xls', `<html><head><meta charset="utf-8"></head><body><table border="1"><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table></body></html>`, 'application/vnd.ms-excel;charset=utf-8;');
-}
-function toPDF(title: string, sub: string, t: Table) {
-  const th = t.cols.map(c => `<th>${c}</th>`).join('');
-  const tr = t.rows.map(r => '<tr>' + r.map(c => `<td>${String(c ?? '')}</td>`).join('') + '</tr>').join('');
-  const w = window.open('', '_blank'); if (!w) return;
-  w.document.write(`<html><head><meta charset="utf-8"><title>${title}</title>
-    <style>body{font-family:'Sarabun',sans-serif;padding:24px;color:#0f172a}h1{font-size:18px;margin:0 0 2px}.sub{font-size:12px;color:#64748b;margin-bottom:14px}
-    table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:left}th{background:#1f3a93;color:#fff}
-    tr:nth-child(even) td{background:#f8fafc}</style></head>
-    <body><h1>${title}</h1><div class="sub">${sub} · การเคหะแห่งชาติ · ระบบ VOC</div>
-    <table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>
-    <script>window.onload=function(){window.print()}<\/script></body></html>`);
-  w.document.close();
+/** ช่วงก่อนหน้าที่ "ยาวเท่ากัน" — ใช้เทียบในบทสรุป ถ้าไม่เท่ากันตัวเลขเปรียบเทียบจะหลอกตา */
+function prevRange(from: string, to: string) {
+  const a = Date.parse(from + 'T00:00:00Z'), b = Date.parse(to + 'T00:00:00Z');
+  if (isNaN(a) || isNaN(b)) return null;
+  const span = b - a + 86400000;
+  const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
+  return { from: iso(a - span), to: iso(a - 86400000) };
 }
 
-const btn: React.CSSProperties = { padding: '7px 12px', borderRadius: 8, border: 'none', color: '#fff', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5 };
 const sel: React.CSSProperties = { padding: '8px 11px', border: '1px solid var(--line)', borderRadius: 9, fontSize: 13, fontFamily: 'inherit', background: 'var(--card,#fff)', color: 'inherit' };
+const DEEP = [
+  { id: 'exec', icon: '📊', name: 'สรุปผู้บริหาร' },
+  { id: 'channel', icon: '📥', name: 'แยกตามช่องทาง' },
+  { id: 'watch', icon: '🔁', name: 'ประเด็นเฝ้าระวัง' },
+  { id: 'strength', icon: '🌟', name: 'จุดแข็งที่ควรขยายผล' },
+] as const;
+type DeepId = (typeof DEEP)[number]['id'];
 
 export default function ReportClient({ rows }: { rows: Voc[] }) {
   const [beYear, setBeYear] = useState(2569);
@@ -57,7 +49,20 @@ export default function ReportClient({ rows }: { rows: Voc[] }) {
   const [ptype, setPtype] = useState('all');
   const [projText, setProjText] = useState('');
   const [maxFY, setMaxFY] = useState(2569);
-  useEffect(() => { const c = currentFYQuarter(); setMaxFY(c.be); setBeYear(c.be); setQuarter(c.q); }, []);
+  const [pick, setPick] = useState<DeepId>('exec');
+  const [tab, setTab] = useState<'doc' | 'info'>('doc');
+  const [tableIdx, setTableIdx] = useState(0);
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState('');
+  const [today, setToday] = useState('');
+
+  useEffect(() => {
+    const c = currentFYQuarter(); setMaxFY(c.be); setBeYear(c.be); setQuarter(c.q);
+    // คำนวณวันที่ฝั่งเบราว์เซอร์เท่านั้น — ถ้าเรนเดอร์ฝั่งเซิร์ฟเวอร์ด้วยจะได้คนละค่าแล้ว hydrate ไม่ตรง
+    setToday(new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }));
+  }, []);
+  useEffect(() => { setTableIdx(0); }, [pick]);
+
   const YEARS = [maxFY, maxFY - 1, maxFY - 2];
   const allTime = beYear === 0;
   const range = periodRange(beYear, quarter);
@@ -67,107 +72,45 @@ export default function ReportClient({ rows }: { rows: Voc[] }) {
     return Array.from(m, ([name, type]) => ({ name, type })).filter(p => ptype === 'all' || p.type === ptype);
   }, [rows, ptype]);
 
-  const fr = useMemo(() => rows.filter(r =>
-    (allTime || (r.occurredAt >= range.from && r.occurredAt <= range.to)) &&
-    (ptype === 'all' || r.projectType === ptype) &&
-    (!projQ || (r.project || '').toLowerCase().includes(projQ))
-  ), [rows, allTime, range.from, range.to, ptype, projQ]);
+  const matchOther = (r: Voc) => (ptype === 'all' || r.projectType === ptype) && (!projQ || (r.project || '').toLowerCase().includes(projQ));
+  const fr = useMemo(() => rows.filter(r => (allTime || (r.occurredAt >= range.from && r.occurredAt <= range.to)) && matchOther(r)),
+    [rows, allTime, range.from, range.to, ptype, projQ]);
+  // ชุดข้อมูลช่วงก่อนหน้า — ใช้เขียนประโยคเปรียบเทียบในบทสรุป (เลือก "ทั้งหมด" จะไม่มีช่วงก่อนให้เทียบ)
+  const prev = useMemo(() => {
+    if (allTime) return [];
+    const pr = prevRange(range.from, range.to); if (!pr) return [];
+    return rows.filter(r => r.occurredAt >= pr.from && r.occurredAt <= pr.to && matchOther(r));
+  }, [rows, allTime, range.from, range.to, ptype, projQ]);
 
-  const scope = allTime ? 'ทั้งหมด (ตั้งแต่มีระบบ)' : `ปีงบ ${beYear} · ${QUARTERS.find(q => q.k === quarter)?.label}`;
+  const scope = [
+    allTime ? 'ทั้งหมด (ตั้งแต่มีระบบ)' : `ปีงบ ${beYear} · ${QUARTERS.find(q => q.k === quarter)?.label}`,
+    ptype !== 'all' ? ptype : '',
+    projText.trim() ? `โครงการ: ${projText.trim()}` : '',
+  ].filter(Boolean).join(' · ');
 
-  // ---------- ตัวสร้างรายงาน ----------
-  function grp<T extends string>(key: (r: Voc) => T) {
-    const m: Record<string, Voc[]> = {};
-    fr.forEach(r => { const k = key(r) || '-'; (m[k] ||= []).push(r); });
-    return m;
-  }
-  const sentOf = (rs: Voc[]) => ({ pos: rs.filter(r => r.sentiment === 'Positive').length, neu: rs.filter(r => r.sentiment === 'Neutral').length, neg: rs.filter(r => r.sentiment === 'Negative').length, high: rs.filter(r => r.priority === 'High').length });
+  const doc: ReportDoc = useMemo(() => {
+    if (pick === 'channel') return buildChannel(fr, prev, scope);
+    if (pick === 'watch') return buildWatch(fr, prev, scope);
+    if (pick === 'strength') return buildStrength(fr, prev, scope);
+    return buildExec(fr, prev, scope);
+  }, [pick, fr, prev, scope]);
 
-  function repExec(): Table {
-    const s = sentOf(fr); const t = fr.length;
-    const byCh = grp(r => r.channel); const topCh = Object.entries(byCh).sort((a, b) => b[1].length - a[1].length)[0];
-    const byPj = grp(r => r.project); const topPj = Object.entries(byPj).sort((a, b) => b[1].length - a[1].length)[0];
-    const tc: Record<string, number> = {}; fr.forEach(r => { if (r.topic) tc[r.topic] = (tc[r.topic] || 0) + 1; });
-    const recurring = Object.values(tc).filter(n => n >= 3).length;
-    return {
-      cols: ['ตัวชี้วัด', 'ค่า'],
-      rows: [
-        ['ช่วงข้อมูล', scope], ['เสียงลูกค้าทั้งหมด', t], ['เชิงบวก', `${s.pos} (${pct(s.pos, t)})`], ['เป็นกลาง', `${s.neu} (${pct(s.neu, t)})`],
-        ['เชิงลบ', `${s.neg} (${pct(s.neg, t)})`], ['เรื่องเร่งด่วน (High)', s.high], ['ประเด็นเฝ้าระวัง (ซ้ำ ≥3)', recurring],
-        ['ช่องทางที่มีเสียงมากสุด', topCh ? `${topCh[0]} (${topCh[1].length})` : '-'], ['โครงการที่มีเสียงมากสุด', topPj ? `${topPj[0]} (${topPj[1].length})` : '-'],
-      ],
-    };
-  }
-  function repAll(): Table {
-    return {
-      cols: ['รหัส', 'ช่องทาง', 'แหล่ง', 'ประเภทโครงการ', 'โครงการ', 'ประเด็น', 'เสียงลูกค้า', 'Sentiment', 'ความรุนแรง', 'ฝ่ายที่เกี่ยวข้อง', 'วันที่เกิดเรื่อง'],
-      rows: fr.map(r => [r.ref, r.channel, r.source, r.projectType, r.project, r.topic, r.voice, SENT_TH[r.sentiment] || r.sentiment, r.priority, r.owner, r.occurredAt]),
-    };
-  }
-  function repByGroup(cols0: string, keyFn: (r: Voc) => string, extraTypeCol = false): Table {
-    const m = grp(keyFn);
-    const rowsOut = Object.entries(m).sort((a, b) => b[1].length - a[1].length).map(([k, rs]) => {
-      const s = sentOf(rs);
-      const base: (string | number)[] = [k];
-      if (extraTypeCol) base.push(rs[0]?.projectType || '-');
-      return [...base, rs.length, pct(s.pos, rs.length), pct(s.neu, rs.length), pct(s.neg, rs.length), s.high];
-    });
-    const cols = extraTypeCol ? [cols0, 'ประเภทโครงการ', 'จำนวน', '%บวก', '%กลาง', '%ลบ', 'เร่งด่วน(High)'] : [cols0, 'จำนวน', '%บวก', '%กลาง', '%ลบ', 'เร่งด่วน(High)'];
-    return { cols, rows: rowsOut };
-  }
-  function repBySentiment(): Table {
-    const t = fr.length;
-    return { cols: ['Sentiment', 'จำนวน', 'สัดส่วน'], rows: (['Positive', 'Neutral', 'Negative'] as const).map(s => { const n = fr.filter(r => r.sentiment === s).length; return [SENT_TH[s], n, pct(n, t)]; }) };
-  }
-  function repByPriority(): Table {
-    const t = fr.length;
-    return { cols: ['ความรุนแรง', 'จำนวน', 'สัดส่วน'], rows: (['High', 'Medium', 'Low'] as const).map(p => { const n = fr.filter(r => r.priority === p).length; return [p, n, pct(n, t)]; }) };
-  }
-  function repRecurring(): Table {
-    const m = grp(r => r.topic);
-    const rowsOut = Object.entries(m).filter(([, rs]) => rs.length >= 3).sort((a, b) => b[1].length - a[1].length)
-      .map(([k, rs]) => [k, rs.length, rs.filter(r => r.sentiment === 'Negative').length, Array.from(new Set(rs.map(r => r.channel))).join(', ')]);
-    return { cols: ['ประเด็น', 'จำนวนครั้ง', 'เชิงลบ', 'ช่องทางที่พบ'], rows: rowsOut };
-  }
+  const plains = useMemo(() => plainReports(fr), [fr]);
+  const meta: InfoMeta = { org: 'การเคหะแห่งชาติ', system: 'ระบบรับฟังเสียงลูกค้า (Voice of Customer)', printedAt: today };
+  const infoSvg = useMemo(() => (tab === 'info' ? buildInfographicSvg(doc, meta) : ''), [tab, doc, today]);
 
-  // จุดแข็ง/คำชม — ระบบ VOC ฟังทั้งสองด้าน ไม่ใช่เฉพาะเสียงลบ
-  function repStrength(): Table {
-    const rowsOut = scoreStrengths(fr).map((x, i) => [
-      i + 1, x.topic, x.posCount, x.count, pct(x.posCount, x.count),
-      x.fl, x.pl, x.tl, x.al, x.score.toFixed(2), strengthBand(x.score).label, x.owner || '-',
-    ]);
-    return {
-      cols: ['อันดับ', 'ประเด็น', 'เสียงบวก', 'ทั้งหมด', '%บวก', 'ความถี่', 'ความเข้มบวก', 'แนวโน้ม', 'การบอกต่อ', 'คะแนน', 'ระดับ', 'ฝ่ายที่ควรได้รับคำชม'],
-      rows: rowsOut,
-    };
+  const blocked = () => setMsg('เบราว์เซอร์บล็อกหน้าต่างใหม่ — กดอนุญาต pop-up ของเว็บนี้แล้วลองอีกครั้ง');
+  async function run(key: string, fn: () => void | Promise<void>) {
+    setBusy(key); setMsg('');
+    try { await fn(); } catch (e) { setMsg('ส่งออกไม่สำเร็จ: ' + (e instanceof Error ? e.message : String(e))); }
+    setBusy('');
   }
-  // คำชมรายเรื่อง — ใช้ส่งให้หน่วยงานดูข้อความจริงที่ลูกค้าชม
-  function repPraise(): Table {
-    return {
-      cols: ['รหัส', 'ช่องทาง', 'โครงการ', 'ประเด็น', 'ข้อความที่ลูกค้าชม', 'ฝ่ายที่เกี่ยวข้อง', 'วันที่เกิดเรื่อง'],
-      rows: fr.filter(r => r.sentiment === 'Positive')
-        .map(r => [r.ref, r.channel, r.project, r.topic, r.voice, r.owner, r.occurredAt]),
-    };
-  }
-
-  const REPORTS: { icon: string; name: string; desc: string; title: string; build: () => Table }[] = [
-    { icon: '📊', name: 'รายงานสรุปผู้บริหาร', desc: 'ภาพรวมเสียงลูกค้า สัดส่วน และประเด็นเด่น สำหรับนำเสนอผู้บริหาร', title: 'รายงานสรุปผู้บริหาร', build: repExec },
-    { icon: '💬', name: 'รายงานเสียงลูกค้าทั้งหมด', desc: 'ข้อมูล VOC รายเรื่อง พร้อมผล AI (Sentiment/ความรุนแรง/ฝ่าย)', title: 'รายงานเสียงลูกค้าทั้งหมด', build: repAll },
-    { icon: '📥', name: 'รายงานแยกตามช่องทาง', desc: 'สรุปปริมาณและคุณภาพเสียงราย 8 ช่องทาง', title: 'รายงานแยกตามช่องทาง', build: () => repByGroup('ช่องทาง', r => r.channel) },
-    { icon: '🏠', name: 'รายงานแยกตามโครงการ', desc: 'สรุปเสียงลูกค้าตามประเภท/ชื่อโครงการ', title: 'รายงานแยกตามโครงการ', build: () => repByGroup('โครงการ', r => r.project, true) },
-    { icon: '😊', name: 'รายงานแยกตาม Sentiment', desc: 'จำนวนและสัดส่วน เชิงบวก/เป็นกลาง/เชิงลบ', title: 'รายงานแยกตาม Sentiment', build: repBySentiment },
-    { icon: '🎯', name: 'รายงานแยกตามความรุนแรง', desc: 'จำนวนและสัดส่วนตามระดับความรุนแรง (High/Medium/Low)', title: 'รายงานแยกตามความรุนแรง', build: repByPriority },
-    { icon: '🏢', name: 'รายงานแยกตามฝ่ายที่เกี่ยวข้อง', desc: 'ส่งให้แต่ละฝ่ายดูเฉพาะเสียงที่เกี่ยวกับตน', title: 'รายงานแยกตามฝ่ายที่เกี่ยวข้อง', build: () => repByGroup('ฝ่ายที่เกี่ยวข้อง', r => r.owner) },
-    { icon: '🔁', name: 'รายงานประเด็นเฝ้าระวัง (ซ้ำ)', desc: 'ประเด็นที่เกิดซ้ำ ≥3 ครั้ง — ตามแนว monitoring', title: 'รายงานประเด็นเฝ้าระวัง', build: repRecurring },
-    { icon: '🌟', name: 'รายงานจุดแข็งที่ควรขยายผล', desc: 'ประเด็นที่ลูกค้าชื่นชม จัดอันดับด้วยโมเดล 4 ปัจจัยด้านบวก พร้อมฝ่ายที่ควรได้รับคำชม', title: 'รายงานจุดแข็งที่ควรขยายผล', build: repStrength },
-    { icon: '💚', name: 'รายงานคำชมรายเรื่อง', desc: 'ข้อความเชิงบวกทั้งหมดพร้อมต้นทาง — ส่งให้หน่วยงานอ่านคำชมจริงจากลูกค้า', title: 'รายงานคำชมรายเรื่อง', build: repPraise },
-  ];
 
   return (
     <>
       <header className="top">
         <h1>รายงานข้อมูล</h1>
-        <div className="sub">เลือกช่วง/ตัวกรอง แล้วดาวน์โหลดรายงานเป็น CSV / Excel / PDF ได้ตามประเภทที่ต้องการ</div>
+        <div className="sub">เลือกรายงาน → อ่านบทสรุปและกราฟบนหน้าเว็บได้ทันที → ส่งออกเป็นตาราง เอกสารทางการ หรืออินโฟกราฟิก</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
           <select style={sel} value={beYear} onChange={e => setBeYear(Number(e.target.value))}>
             <option value={0}>ทั้งหมด (ตั้งแต่มีระบบ)</option>
@@ -189,29 +132,153 @@ export default function ReportClient({ rows }: { rows: Voc[] }) {
         {fr.length === 0 ? (
           <div className="card">
             <EmptyState icon="📄" title="ไม่มีข้อมูลให้ออกรายงานในช่วงนี้"
-              detail={<>ช่วงที่เลือกคือ <b>{scope}</b> ซึ่งยังไม่มีเสียงลูกค้า — รายงานที่ดาวน์โหลดจะว่างเปล่า<br />
+              detail={<>ช่วงที่เลือกคือ <b>{scope}</b> ซึ่งยังไม่มีเสียงลูกค้า<br />
                 ลองเลือก &ldquo;ทั้งหมด (ตั้งแต่มีระบบ)&rdquo; ขยายประเภท/ชื่อโครงการ หรือนำเข้าข้อมูลเพิ่มก่อน</>} />
           </div>
         ) : (
-        <>
-        <div className="card" style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', fontSize: 13 }}>
-          📄 กำลังแสดงรายงานของช่วง: <b>{scope}</b> · พบ <b>{fr.length.toLocaleString()}</b> รายการ — ทุกรายงานด้านล่างอิงตามตัวกรองนี้
-        </div>
+          <>
+            {/* เลือกรายงานเชิงลึก */}
+            <div className="rp-pick">
+              {DEEP.map(d => (
+                <button key={d.id} type="button" className={'rp-tab' + (pick === d.id ? ' on' : '')} onClick={() => setPick(d.id)}>
+                  <span className="rp-tab-ic">{d.icon}</span>{d.name}
+                </button>
+              ))}
+              <span className="rp-scope">ช่วงข้อมูล: <b>{scope}</b> · {fr.length.toLocaleString()} รายการ</span>
+            </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 16 }}>
-          {REPORTS.map(rep => (
-            <div key={rep.name} className="card" style={{ marginBottom: 0 }}>
-              <h3>{rep.icon} {rep.name}</h3>
-              <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '2px 0 12px' }}>{rep.desc}</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button style={{ ...btn, background: '#16a34a' }} onClick={() => toCSV(rep.title, rep.build())}>↓ CSV</button>
-                <button style={{ ...btn, background: '#1f7a3d' }} onClick={() => toExcel(rep.title, rep.build())}>↓ Excel</button>
-                <button style={{ ...btn, background: '#dc2626' }} onClick={() => toPDF(rep.title, scope, rep.build())}>↓ PDF</button>
+            {/* แถบส่งออก — 5 แบบ แยกตามลักษณะการใช้งาน ไม่ใช่แยกตามนามสกุลไฟล์ */}
+            <div className="card rp-bar">
+              <div className="rp-bar-g">
+                <span className="rp-bar-l">ตาราง</span>
+                <button className="rp-btn csv" disabled={!!busy} onClick={() => run('csv', () => exportCSV(`${doc.name}_${scope}`, doc.tables[tableIdx] ?? doc.tables[0]))}>
+                  ↓ CSV<small>ตารางที่เปิดอยู่</small>
+                </button>
+                <button className="rp-btn xls" disabled={!!busy} onClick={() => run('xls', () => exportXLSX(`${doc.name}_${scope}`, doc.tables, { doc, meta }))}>
+                  {busy === 'xls' ? '⏳ กำลังสร้าง…' : <>↓ Excel<small>บทสรุป + {doc.tables.length} ชีต</small></>}
+                </button>
+              </div>
+              <div className="rp-bar-g">
+                <span className="rp-bar-l">เอกสาร</span>
+                <button className="rp-btn pdf" disabled={!!busy} onClick={() => run('pdf', () => { exportPDFDoc(doc, meta, blocked); })}>
+                  ↓ PDF ทางการ<small>ปก · บทสรุป · กราฟ · ตาราง</small>
+                </button>
+              </div>
+              <div className="rp-bar-g">
+                <span className="rp-bar-l">อินโฟกราฟิก</span>
+                <button className="rp-btn png" disabled={!!busy} onClick={() => run('png', () => exportInfographicPNG(doc, meta))}>
+                  {busy === 'png' ? '⏳ กำลังสร้างภาพ…' : <>↓ PNG<small>แปะสไลด์/ส่งไลน์</small></>}
+                </button>
+                <button className="rp-btn ipdf" disabled={!!busy} onClick={() => run('ipdf', () => { exportInfographicPDF(doc, meta, blocked); })}>
+                  ↓ PDF แผ่นเดียว<small>A4 แนวนอน คมทุกขนาด</small>
+                </button>
               </div>
             </div>
-          ))}
-        </div>
-        </>
+            {msg && <div className="card rp-msg">⚠ {msg}</div>}
+
+            <div className="rp-view">
+              <button type="button" className={'rp-vtab' + (tab === 'doc' ? ' on' : '')} onClick={() => setTab('doc')}>📄 เอกสารทางการ</button>
+              <button type="button" className={'rp-vtab' + (tab === 'info' ? ' on' : '')} onClick={() => setTab('info')}>🖼️ อินโฟกราฟิก</button>
+              <span className="rp-vnote">สิ่งที่เห็นตรงนี้คือสิ่งที่จะได้ในไฟล์ — ไม่ต้องโหลดมาเปิดเพื่อดูว่าข้างในมีอะไร</span>
+            </div>
+
+            {tab === 'info' ? (
+              <div className="card rp-info" dangerouslySetInnerHTML={{ __html: infoSvg }} />
+            ) : (
+              <>
+                {/* ---------- ตัวชี้วัด ---------- */}
+                <div className="rp-kpis">
+                  {doc.kpis.map(k => (
+                    <div key={k.label} className={'rp-kpi t-' + (k.tone ?? 'plain')}>
+                      <div className="rp-kl">{k.label}</div>
+                      <div className="rp-kv">{k.value}</div>
+                      {k.note && <div className="rp-kn">{k.note}</div>}
+                    </div>
+                  ))}
+                </div>
+
+                {/* ---------- บทสรุปเป็นข้อความ ---------- */}
+                <div className="card rp-doc">
+                  <div className="rp-doc-head">
+                    <div>
+                      <h2>{doc.icon} {doc.name}</h2>
+                      <div className="rp-doc-sub">{doc.desc}</div>
+                    </div>
+                    <div className="rp-doc-meta">ช่วงข้อมูล<br /><b>{doc.scope}</b>{today && <><br />ออกรายงาน {today}</>}</div>
+                  </div>
+                  {doc.sections.map(s => (
+                    <section key={s.head} className="rp-sec">
+                      <h3>{s.head}</h3>
+                      {s.paras.map((p, i) => <p key={i}>{p}</p>)}
+                      {s.bullets && s.bullets.length > 0 && <ul>{s.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>}
+                    </section>
+                  ))}
+                </div>
+
+                {/* ---------- กราฟ ---------- */}
+                {doc.charts.map(c => (
+                  <div className="card rp-fig" key={c.title}>
+                    <h3>{c.title}</h3>
+                    {c.note && <div className="rp-fnote">{c.note}</div>}
+                    <div className="rp-svg" dangerouslySetInnerHTML={{ __html: c.svg }} />
+                  </div>
+                ))}
+
+                {/* ---------- ตาราง ---------- */}
+                <div className="card">
+                  <div className="rp-tabs">
+                    {doc.tables.map((t, i) => (
+                      <button key={t.sheet} type="button" className={'rp-ttab' + (tableIdx === i ? ' on' : '')} onClick={() => setTableIdx(i)}>
+                        {t.title} <b>({t.rows.length.toLocaleString()})</b>
+                      </button>
+                    ))}
+                  </div>
+                  {(() => {
+                    const t = doc.tables[tableIdx] ?? doc.tables[0];
+                    const show = t.rows.slice(0, 50);
+                    return (
+                      <>
+                        <div className="rp-tablewrap">
+                          <table className="rp-table">
+                            <thead><tr>{t.cols.map(c => <th key={c}>{c}</th>)}</tr></thead>
+                            <tbody>
+                              {show.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j}>{String(c ?? '')}</td>)}</tr>)}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="rp-fnote" style={{ marginTop: 8 }}>
+                          {t.rows.length > 50
+                            ? <>แสดง 50 แถวแรกจากทั้งหมด <b>{t.rows.length.toLocaleString()}</b> แถว — ดาวน์โหลด Excel หรือ CSV เพื่อดูครบทุกแถว</>
+                            : <>ทั้งหมด <b>{t.rows.length.toLocaleString()}</b> แถว</>}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </>
+            )}
+
+            {/* ---------- รายงานตารางล้วน ---------- */}
+            <div className="card">
+              <h3>📋 รายงานตารางสำหรับส่งต่อหน่วยงาน</h3>
+              <div className="rp-fnote">ตารางล้วนไม่มีบทสรุป — ใช้ส่งให้ฝ่ายงานกรอง/เรียงเอง · ทุกไฟล์อิงช่วงข้อมูลเดียวกับด้านบน</div>
+              <div className="rp-plain">
+                {plains.map(p => (
+                  <div key={p.id} className="rp-pcard">
+                    <div className="rp-pname">{p.icon} {p.name}</div>
+                    <div className="rp-pdesc">{p.desc}</div>
+                    <div className="rp-pacts">
+                      <button className="rp-btn sm csv" disabled={!!busy} onClick={() => run('p' + p.id, () => exportCSV(`${p.name}_${scope}`, p.build()))}>↓ CSV</button>
+                      <button className="rp-btn sm xls" disabled={!!busy} onClick={() => run('px' + p.id, () => exportXLSX(`${p.name}_${scope}`, [p.build()]))}>
+                        {busy === 'px' + p.id ? '⏳' : '↓ Excel'}
+                      </button>
+                      <span className="rp-prow">{p.build().rows.length.toLocaleString()} แถว</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
         )}
       </div>
     </>
