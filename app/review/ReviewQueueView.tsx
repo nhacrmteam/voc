@@ -14,6 +14,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { CHANNELS } from '../../lib/data';
 import EmptyState from '../components/EmptyState';
+import { IS_DEMO } from '../../lib/demo';
+import DemoBlocked from '../DemoBlocked';
 
 type Sent = 'Positive' | 'Neutral' | 'Negative';
 interface Item {
@@ -34,6 +36,8 @@ const one = <T,>(x: T | T[] | null | undefined): T | undefined => (Array.isArray
 const sel: React.CSSProperties = { padding: '8px 11px', border: '1px solid var(--line)', borderRadius: 9, fontSize: 13, fontFamily: 'inherit', background: 'var(--card,#fff)', color: 'inherit' };
 
 export default function ReviewQueueView() {
+  // เว็บสาธิต: ปิดหน้านี้ (ชั้นสำรองของ middleware)
+  if (IS_DEMO) return <DemoBlocked title="คิวรอยืนยันเสียงลูกค้า" />;
   const [role, setRole] = useState<string | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [total, setTotal] = useState(0);

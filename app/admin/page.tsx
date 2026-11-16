@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { DEPT_GROUPS, journeyLabel } from '../../lib/data';
 import { pingLLM, LlmPing } from '../../lib/ai';
+import { IS_DEMO } from '../../lib/demo';
+import DemoBlocked from '../DemoBlocked';
 
 const ROLE_TH: Record<string, string> = { pending: 'รออนุมัติ', admin: 'แอดมิน', operator: 'ผู้ปฏิบัติงาน', executive: 'ผู้บริหาร' };
 const ROLE_RIGHT: Record<string, string> = {
@@ -55,6 +57,8 @@ function genSecret() {
 const sel: React.CSSProperties = { padding: '6px 9px', border: '1px solid #dfe6f0', borderRadius: 8, fontSize: 12.5, fontFamily: 'inherit', background: '#fff' };
 
 export default function AdminPage() {
+  // เว็บสาธิต: ปิดหน้านี้ (ชั้นสำรองของ middleware)
+  if (IS_DEMO) return <DemoBlocked title="จัดการระบบ" />;
   const [role, setRole] = useState<string | null>(null);
   const [me, setMe] = useState('');
   const [users, setUsers] = useState<Profile[]>([]);
@@ -218,7 +222,8 @@ export default function AdminPage() {
           </table>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10, lineHeight: 1.7 }}>
             วิธีใช้: ระบบต้นทางส่ง <code>POST</code> มาที่ endpoint พร้อม header <code>x-voc-secret</code> = secret ของช่องทาง<br />
-            รูปแบบข้อมูล: <code>{'{ "channel_id": "call", "text": "ข้อความลูกค้า", "source": "Call Center 1615" }'}</code> หรือ LINE webhook ส่งตรงได้เลย (channel_id = social อัตโนมัติ)<br />
+            รูปแบบข้อมูล: <code>{'{ "channel_id": "call", "text": "ข้อความลูกค้า", "source": "Call Center 1615" }'}</code><br />
+            <b>LINE OA:</b> ไม่ต้องใช้ <code>x-voc-secret</code> (LINE ส่ง header ที่เรากำหนดเองไม่ได้) — ให้วาง <b>Channel Secret</b> ของ Messaging API ลงในช่อง Webhook Secret ของช่องทาง <b>Social Media</b> ระบบจะตรวจลายเซ็น <code>x-line-signature</code> ให้เอง<br />
             ดูวิธีเชื่อม LINE OA / Facebook / Google Forms / Email ทีละขั้นในไฟล์ <b>เชื่อมต่อ_API_ช่องทาง.md</b>
           </div>
         </div>

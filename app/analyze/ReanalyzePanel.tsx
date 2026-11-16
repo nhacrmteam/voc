@@ -78,7 +78,19 @@ export default function ReanalyzePanel() {
         }).eq('voc_id', list[i].voc_id);
         if (!e2) {
           updated++;
-          await supabase.from('voc_record').update({ owner_dept: r.owner }).eq('id', list[i].voc_id);
+          // 🚨 ห้ามทับฝ่ายที่ "เจ้าหน้าที่แก้เองแล้ว"
+          //    owner_dept_by ไม่ใช่ null = มีคนแก้ฝ่ายรายการนี้ด้วยมือ
+          //    ถ้าทับ จะเสียหาย 2 ต่อ: ความถูกต้องที่คนแก้ไว้หายไป และตัวชี้วัด
+          //    "ส่งถึงฝ่ายถูกต้องตั้งแต่ครั้งแรก" จะเด้งกลับไปเท่ากับค่าที่ AI เสนอ
+          //    = รายงานเกินจริงให้ผู้ประเมิน (หลักเดียวกับที่ sentiment_manual ถูกกันไว้ใน rule_based_pending)
+          const { error: e3 } = await supabase.from('voc_record')
+            .update({ owner_dept: r.owner })
+            .eq('id', list[i].voc_id)
+            .is('owner_dept_by', null);
+          // ยังไม่ได้รัน supabase_owner_dept_tracking.sql → ไม่มีคอลัมน์นี้ ถอยไปใช้แบบเดิม
+          if (e3 && /owner_dept_by|column/i.test(e3.message || '')) {
+            await supabase.from('voc_record').update({ owner_dept: r.owner }).eq('id', list[i].voc_id);
+          }
         }
         setProg('บันทึกผลแล้ว ' + (i + 1) + '/' + list.length + ' รายการ…');
       }

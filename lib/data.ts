@@ -16,6 +16,14 @@ export interface Voc {
   journey: string; topic: string; voice: string;
   sentiment: Sentiment; priority: Priority;
   owner: string;
+  // ฝ่ายที่ระบบเสนอตอนนำเข้า — ไม่เปลี่ยนตามการแก้ของเจ้าหน้าที่
+  // ใช้เทียบกับ owner เพื่อวัด "ส่งถึงฝ่ายถูกต้องตั้งแต่ครั้งแรก"
+  // '' = ข้อมูลเก่าที่นำเข้าก่อนเริ่มเก็บค่านี้ → ไม่นำมานับในตัวชี้วัด
+  ownerAi: string;
+  ownerFixed: boolean;          // เจ้าหน้าที่เคยแก้ฝ่ายรายการนี้หรือยัง
+  // เลขรับเรื่องของระบบต้นทาง — ใช้ตามรอยกลับไปหาผู้แจ้ง แทนการเก็บชื่อไว้ในระบบนี้
+  // '' = ไฟล์ต้นทางไม่มีคอลัมน์นี้ หรือยังไม่ได้รัน supabase_source_ref.sql
+  sourceRef: string;
   occurredAt: string; importedAt: string; imported: boolean;
   catProduct: string; catSales: string;
   sentConf: number; sentUncertain: boolean; sentManual: boolean; sentReason: string;
@@ -92,6 +100,9 @@ export const DEPT_GROUPS: { group: string; depts: string[] }[] = [
 // รายชื่อฝ่ายแบบเรียง (flat) — ใช้กับ dropdown / การจับคู่อัตโนมัติ
 export const DEPTS = DEPT_GROUPS.flatMap(g => g.depts);
 
+// ฝ่ายบริหารงานชุมชน 6 ภูมิภาค + การจับคู่จังหวัด อยู่ในไฟล์แยก (กันการ import วนกันกับ lib/ai.ts)
+export { COMMUNITY_GENERIC, COMMUNITY_DEPT_BY_PROVINCE, communityDeptFor } from './communityDept';
+
 // ---------- MOCK (ใช้เมื่อยังไม่ตั้งค่า Supabase) ----------
 const VOICES = [
   { topic: 'แจ้งซ่อมระบบประปา', voice: 'น้ำประปาในห้องไหลอ่อนมาก บางวันไม่ไหลเลย รบกวนส่งช่างมาตรวจสอบ', sent: 'Negative' as Sentiment, cat: 'คุณภาพโครงการและการก่อสร้าง', owner: 'ฝ่ายปรับปรุงและบำรุงรักษาชุมชน' },
@@ -130,6 +141,12 @@ export const MOCK: Voc[] = Array.from({ length: 60 }, (_, i) => {
     journey: pick(['Awareness', 'Consideration', 'Purchase', 'Service', 'Loyalty', 'Win Back'], i),
     topic: v.topic, voice: v.voice, sentiment: v.sent, priority: prio,
     owner: v.owner,
+    // ข้อมูลจำลองต้องเป็น '' เสมอ — ห้ามใส่ v.owner
+    //   ถ้าใส่ ตัวชี้วัดจะขึ้น "ถูกตั้งแต่ครั้งแรก 100%" ซึ่งเป็นตัวเลขที่ไม่ได้วัดมาจริง
+    //   และอาจไปปรากฏต่อหน้าผู้ประเมิน ต้องขึ้นว่า "ยังวัดไม่ได้" เท่านั้น
+    ownerAi: '',
+    ownerFixed: false,
+    sourceRef: '',
     occurredAt: `${mm}-${String(day).padStart(2, '0')}`,
     importedAt: imported ? '2026-06-26' : `${mm}-${String(day).padStart(2, '0')}`,
     imported, catProduct: v.cat, catSales: 'การให้ข้อมูลโครงการ',

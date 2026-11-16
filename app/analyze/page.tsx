@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { JOURNEYS, JOURNEY_TH, JOURNEY_DESC } from '../../lib/data';
 import { listVOC, sentimentStats, requireUser } from '../../lib/dataServer';
 import ReanalyzePanel from './ReanalyzePanel';
+import { IS_DEMO } from '../../lib/demo';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +42,13 @@ export default async function Analyze() {
   const total = rows.length || 1;
   const pendingReview = rows.filter(r => r.sentUncertain && !r.sentManual).length;
 
+  // ตัวชี้วัด "ส่งถึงฝ่ายถูกต้องตั้งแต่ครั้งแรก"
+  // นับเฉพาะแถวที่มีค่า ownerAi = ข้อมูลที่นำเข้าหลังเริ่มเก็บค่านี้เท่านั้น
+  // ข้อมูลเก่ากว่านั้นไม่มีค่าอ้างอิง จึงไม่เอามานับ (ดู supabase_owner_dept_tracking.sql)
+  const measurable = rows.filter(r => r.ownerAi);
+  const firstRight = measurable.filter(r => r.owner === r.ownerAi).length;
+  const ownerPct = measurable.length ? Math.round(firstRight / measurable.length * 100) : null;
+
   const prod = groupBy(rows, 'catProduct');
   const sales = groupBy(rows, 'catSales');
   const owner = groupBy(rows, 'owner');
@@ -64,8 +72,44 @@ export default async function Analyze() {
           <div className="card" style={{ marginBottom: 0 }}><div style={{ fontSize: 12, color: 'var(--muted)' }}>% เสียงเชิงลบ</div><div style={{ fontSize: 26, fontWeight: 700, color: '#dc2626' }}>{s.negPct}%</div></div>
         </div>
 
-        {/* เครื่องมือวิเคราะห์ที่ใช้จริง + วิเคราะห์ใหม่ด้วย LLM */}
-        <ReanalyzePanel />
+        {/* เครื่องมือวิเคราะห์ที่ใช้จริง + วิเคราะห์ใหม่ด้วย LLM
+            เว็บสาธิตซ่อนแผงนี้ เพราะการสั่งวิเคราะห์ใหม่คือการ "เขียนข้อมูล" ซึ่งฐานสาธิตปิดไว้ */}
+        {IS_DEMO ? (
+          <div className="card" style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9 }}>
+            🔒 <b>โหมดสาธิต</b> — ปิดการสั่งวิเคราะห์ใหม่ด้วย LLM ไว้ เพื่อให้ชุดข้อมูลจำลองคงเดิมทุกครั้งที่เปิดดู
+            <br />ผลการวิเคราะห์ที่แสดงอยู่ คือผลที่ระบบวิเคราะห์ไว้แล้วทั้ง 10,012 รายการ
+          </div>
+        ) : (
+          <ReanalyzePanel />
+        )}
+
+        {/* ความแม่นยำการจับคู่ฝ่ายผู้รับผิดชอบ */}
+        <div className="card">
+          <h3 style={{ marginBottom: 4 }}>🏢 ส่งถึงฝ่ายถูกต้องตั้งแต่ครั้งแรก</h3>
+          {ownerPct === null ? (
+            <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9 }}>
+              ยังวัดไม่ได้ — ตัวชี้วัดนี้เทียบ &ldquo;ฝ่ายที่ระบบเสนอตอนนำเข้า&rdquo; กับ &ldquo;ฝ่ายปัจจุบันหลังเจ้าหน้าที่ตรวจ&rdquo;
+              ข้อมูลที่อยู่ในระบบตอนนี้นำเข้ามาก่อนที่ระบบจะเริ่มเก็บค่าแรกไว้ จึงไม่มีค่าอ้างอิงให้เทียบ
+              <br />จะเริ่มมีตัวเลขเมื่อนำเข้าข้อมูลชุดใหม่ หลังรัน <code>supabase_owner_dept_tracking.sql</code> แล้ว
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 34, fontWeight: 700, color: ownerPct >= 80 ? 'var(--green)' : ownerPct >= 60 ? '#b45309' : '#dc2626' }}>
+                  {ownerPct}%
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--muted)' }}>
+                  {firstRight.toLocaleString()} จาก {measurable.length.toLocaleString()} รายการที่วัดได้
+                  {measurable.length < rows.length && ' · อีก ' + (rows.length - measurable.length).toLocaleString() + ' รายการนำเข้าก่อนเริ่มเก็บค่า จึงไม่นับ'}
+                </div>
+              </div>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.8 }}>
+                นับจากจำนวนครั้งที่เจ้าหน้าที่ไม่ต้องแก้ฝ่ายที่ระบบเสนอ — แก้ได้ที่หน้ารายละเอียดของแต่ละรายการ
+                <br />ถ้าตัวเลขต่ำ แปลว่ากติกาจับคู่ฝ่ายใน <code>lib/ai.ts</code> ต้องปรับ ดูคู่ที่ผิดบ่อยได้จากมุมมอง <code>voc_owner_miss</code>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* คิวยืนยัน — สรุปแล้วส่งต่อไปหน้าจัดการคิวเต็ม (/review)
             เดิมแปะรายการ 20 อันไว้ตรงนี้ ทำให้หน้านี้ยาวและทำงานต่อไม่ได้จริง */}
@@ -82,7 +126,10 @@ export default async function Analyze() {
               {pendingReview.toLocaleString()}
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>รายการรอยืนยัน</div>
-            <Link href="/review" className="btn">เปิดคิวรอยืนยัน →</Link>
+            {/* เว็บสาธิต: แสดงตัวเลขได้ แต่ไม่พาเข้าหน้าที่แก้ไขข้อมูลได้ */}
+            {IS_DEMO
+              ? <div style={{ fontSize: 12, color: 'var(--muted)' }}>🔒 ปิดในโหมดสาธิต</div>
+              : <Link href="/review" className="btn">เปิดคิวรอยืนยัน →</Link>}
           </div>
         </div>
 

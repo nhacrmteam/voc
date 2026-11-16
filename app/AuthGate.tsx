@@ -5,7 +5,9 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import TopBadges from './TopBadges';
+import DemoBanner from './DemoBanner';
 import { DEPT_GROUPS } from '../lib/data';
+import { IS_DEMO, DEMO_URL } from '../lib/demo';
 
 // หน้าที่เข้าได้โดยไม่ต้องล็อกอิน (ยืนยันอีเมล ฯลฯ)
 const PUBLIC_PATHS = ['/welcome'];
@@ -151,6 +153,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
 
   // ทำให้ URL ตรงกับสถานะจริง: ยังไม่ล็อกอิน → /login, ล็อกอินแล้วแต่อยู่ /login → /dashboard
   useEffect(() => {
+    if (IS_DEMO) return;   // เว็บสาธิตไม่ต้องล็อกอิน ห้ามเด้งไป /login
     if (!ready || !supabase) return;
     if (!session && mode !== 'recovery' && !PUBLIC_PATHS.includes(pathname) && pathname !== '/login') {
       router.replace('/login');
@@ -160,6 +163,11 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
       router.refresh();
     }
   }, [ready, session, mode, pathname]);
+
+  // ---------- เว็บสาธิต ----------
+  // ข้ามด่านล็อกอินทั้งหมด แสดงเนื้อหาได้เลย พร้อมแถบกำกับว่าเป็นข้อมูลจำลอง
+  // (ไม่ต้องรอ ready เพราะไม่มีการตรวจ session ให้รอ — เปิดมาเห็นหน้าเว็บทันที)
+  if (IS_DEMO) return <><DemoBanner />{children}</>;
 
   if (!ready) return <div style={{ padding: 40, fontFamily: 'Sarabun,sans-serif' }}>กำลังโหลด…</div>;
 
@@ -232,6 +240,26 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
                   <button type="button" style={linkBtn} onClick={() => { setMode('forgot'); setErr(''); setMsg(''); }}>ลืมรหัสผ่าน?</button>
                   <button type="button" style={linkBtn} onClick={() => { setMode('signup'); setErr(''); setMsg(''); }}>สมัครใช้งาน →</button>
                 </div>
+
+                {/* ปุ่มไปเว็บสาธิต — โผล่เฉพาะเมื่อตั้งค่า NEXT_PUBLIC_DEMO_URL ไว้
+                    ไม่ตั้งค่า = หน้าล็อกอินของระบบจริงเหมือนเดิมทุกจุด (ยังไม่มีอะไรเปลี่ยน) */}
+                {DEMO_URL && (
+                  <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #eef2f7' }}>
+                    <a
+                      href={DEMO_URL}
+                      style={{
+                        display: 'block', textAlign: 'center', padding: '11px 12px',
+                        background: '#fff7e6', border: '1px solid #f0c674', borderRadius: 9,
+                        color: '#7c4a03', fontWeight: 700, fontSize: 13.5, textDecoration: 'none',
+                      }}
+                    >
+                      👁️ ดูระบบตัวอย่าง (ข้อมูลจำลอง)
+                    </a>
+                    <div style={{ fontSize: 11.5, color: '#64748b', textAlign: 'center', marginTop: 7, lineHeight: 1.6 }}>
+                      เข้าดูได้โดยไม่ต้องล็อกอิน · เป็นข้อมูลจำลองเพื่อการสาธิต
+                    </div>
+                  </div>
+                )}
               </form>
             )}
 

@@ -10,6 +10,7 @@ import EmptyState from '../components/EmptyState';
 import { useSort, SortTh } from '../components/SortTh';
 import VocModal from './VocModal';
 import { ALL_TIME } from '../../lib/vocLink';
+import { IS_DEMO, DEMO_FY, DEMO_QUARTER } from '../../lib/demo';
 
 const QUARTERS: { k: string; label: string }[] = [
   { k: 'year', label: 'ทั้งปี (สะสม)' },
@@ -69,8 +70,8 @@ export default function VocListView({ rows, initialQ, initialFy, initialQuarter 
     setMaxFY(c.be);
     // ลิงก์ที่พกช่วงเวลามาด้วย (?fy=&qt=) ให้ใช้ช่วงนั้น — ไม่งั้นค่อยตั้งเป็นไตรมาสปัจจุบัน
     const fy = initialFy != null && initialFy !== '' ? Number(initialFy) : NaN;
-    setBeYear(Number.isFinite(fy) ? fy : c.be);
-    setQuarter(initialQuarter && QUARTERS.some(x => x.k === initialQuarter) ? initialQuarter : c.q);
+    setBeYear(Number.isFinite(fy) ? fy : (IS_DEMO ? DEMO_FY : c.be));
+    setQuarter(initialQuarter && QUARTERS.some(x => x.k === initialQuarter) ? initialQuarter : (IS_DEMO ? DEMO_QUARTER : c.q));
   }, [initialFy, initialQuarter]);
   const YEARS = [maxFY, maxFY - 1, maxFY - 2];
 

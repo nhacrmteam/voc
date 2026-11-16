@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { IS_DEMO, isDemoBlocked } from '../lib/demo';
 
 const ITEMS: { href: string; label: string; staffOnly?: boolean; adminOnly?: boolean }[] = [
   { href: '/dashboard', label: '📊 ภาพรวม' },
@@ -31,7 +32,7 @@ export default function NavMenu() {
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
   useEffect(() => {
-    if (!supabase) return;
+    if (IS_DEMO || !supabase) return;   // เว็บสาธิตไม่มีผู้ใช้ให้ถาม
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return;
       const { data: p } = await supabase!.from('profiles').select('role').eq('id', data.user.id).single();
@@ -42,6 +43,9 @@ export default function NavMenu() {
   return (
     <nav className="nav">
       {ITEMS.filter(it => {
+        // เว็บสาธิต: ซ่อนทุกเมนูที่เขียนข้อมูลได้ (นำเข้าข้อมูล · จัดการระบบ · คิวรอยืนยัน)
+        // ด่านจริงอยู่ที่ middleware + ฐานสาธิตอ่านอย่างเดียว ตรงนี้คือไม่ให้เห็นปุ่มที่กดแล้วไม่ได้ผล
+        if (IS_DEMO && isDemoBlocked(it.href)) return false;
         if (it.staffOnly && role === 'executive') return false;
         if (it.adminOnly && role !== 'admin' && role !== '') return false;  // '' = โหมดสาธิต แสดงทุกเมนู
         return true;

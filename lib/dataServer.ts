@@ -22,6 +22,7 @@ import { redirect } from 'next/navigation';
 import { createServerClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { MOCK, CHANNELS, projectTypeOf, type Voc, type Sentiment, type Priority } from './data';
+import { IS_DEMO } from './demo';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -49,6 +50,13 @@ export interface SessionUser { id: string; email: string; role: string; fullName
  * โหมดสาธิต (ยังไม่ตั้งค่า ENV) → ปล่อยผ่าน เพราะไม่มีข้อมูลจริงให้รั่ว
  */
 export async function requireUser(): Promise<SessionUser | null> {
+  // ---------- เว็บสาธิต ----------
+  // ปล่อยผ่านโดยไม่ต้องล็อกอิน (ผู้ประเมิน/บุคคลทั่วไปเปิดดูได้) — ปลอดภัยเพราะ
+  //   ฐานข้อมูลที่เว็บสาธิตชี้ไป เป็นฐานคนละชุดกับระบบจริง มีแต่ข้อมูลจำลอง และล็อกเป็นอ่านอย่างเดียว
+  //   ถ้า ENV ชุดนี้ถูกเผลอใส่บนระบบจริง การอ่านจะถูก RLS ปฏิเสธ (ฐานจริงไม่เปิดสิทธิ์ให้ anon)
+  //   หน้าเว็บจะว่าง ไม่ใช่ข้อมูลประชาชนรั่ว — ดู lib/demo.ts หัวข้อ "กุญแจสองดอก"
+  if (IS_DEMO) return null;
+
   const sb = getServerSupabase();
   if (!sb) return null;                       // โหมดสาธิต — ใช้ข้อมูลจำลองเท่านั้น
 
@@ -66,6 +74,7 @@ export async function requireUser(): Promise<SessionUser | null> {
 
 /** เฉพาะหน้าที่แอดมินเท่านั้นที่เข้าได้ */
 export async function requireAdmin(): Promise<SessionUser | null> {
+  if (IS_DEMO) redirect('/dashboard');   // เว็บสาธิตไม่มีแอดมิน และไม่ให้แก้ไขอะไรได้
   const u = await requireUser();
   if (u && u.role !== 'admin') redirect('/dashboard');
   return u;
@@ -84,6 +93,9 @@ function mapRow(r: any): Voc {
     journey: r.journey_stage ?? '', topic: r.topic ?? '', voice: r.raw_text ?? '',
     sentiment: (a.sentiment ?? 'Neutral') as Sentiment, priority: (a.priority ?? 'Low') as Priority,
     owner: r.owner_dept ?? '',
+    ownerAi: r.owner_dept_ai ?? '',
+    ownerFixed: !!r.owner_dept_by,
+    sourceRef: r.source_ref ?? '',
     occurredAt: r.occurred_at ?? '', importedAt: r.imported_at ?? r.occurred_at ?? '',
     imported: !!r.is_imported, catProduct: a.cat_product ?? '', catSales: a.cat_sales ?? '',
     sentConf: a.sentiment_confidence ?? 0, sentUncertain: (a.sentiment_confidence ?? 100) <= 50 && !a.sentiment_manual,
@@ -97,15 +109,35 @@ const MAX_PAGES = 30;  // กันวนไม่รู้จบ (สูงส�
 
 // เลือกเฉพาะคอลัมน์ที่หน้าเว็บใช้จริง — ไม่ใช้ '*' เพราะจะลากคอลัมน์ที่ไม่ได้ใช้
 // (product_group / status / created_by / created_at) มาด้วย ทำให้ payload ใหญ่ขึ้นฟรี ๆ
-const SELECT_COLS =
+const BASE_COLS =
   'id,ref_code,channel_id,source,project_id,journey_stage,raw_text,topic,occurred_at,imported_at,is_imported,owner_dept,' +
   'analysis(sentiment,sentiment_confidence,sentiment_manual,sentiment_reason,cat_product,cat_sales,priority),' +
   'project(name,project_type),channel(name)';
 
-function page(sb: SupabaseClient, from: number) {
+// คอลัมน์ที่เพิ่มเข้ามาทีหลังด้วยสคริปต์ SQL แยก
+//   owner_dept_ai / owner_dept_by → supabase_owner_dept_tracking.sql
+//   source_ref                    → supabase_source_ref.sql
+const LATER_COLS = 'owner_dept_ai,owner_dept_by,source_ref,';
+const SELECT_COLS = BASE_COLS.replace('owner_dept,', 'owner_dept,' + LATER_COLS);
+
+// 🚨 ถ้า select คอลัมน์ที่ยังไม่มีในฐาน PostgREST จะตอบ error ทั้งคำขอ
+//    ผลคือ **ทั้งเว็บขึ้น 0 รายการ** ทั้งที่ข้อมูลอยู่ครบ — เคยเป็นกับดักเดียวกับตอนรัน
+//    supabase_lock_read_policy.sql สลับลำดับ
+//    จึงถามฐานครั้งเดียวว่ารองรับคอลัมน์ชุดใหม่ไหม แล้วจำไว้ตลอดอายุเซิร์ฟเวอร์
+//    = อัปโค้ดก่อนรัน SQL ได้ โดยเว็บยังทำงานปกติ แค่ยังไม่มีข้อมูลคอลัมน์ใหม่
+let colsCache: string | null = null;
+async function cols(sb: SupabaseClient): Promise<string> {
+  if (colsCache) return colsCache;
+  const { error } = await sb.from('voc_record').select(LATER_COLS.slice(0, -1)).limit(1);
+  if (error) console.warn('ยังไม่ได้รัน SQL คอลัมน์เพิ่มเติม — ใช้คอลัมน์พื้นฐานไปก่อน:', error.message);
+  colsCache = error ? BASE_COLS : SELECT_COLS;
+  return colsCache;
+}
+
+function page(sb: SupabaseClient, from: number, select: string) {
   return sb
     .from('voc_record')
-    .select(SELECT_COLS)
+    .select(select)
     .order('occurred_at', { ascending: false })
     .order('id', { ascending: true })   // ตัวตัดสินลำดับ กันแถวซ้ำ/หายเวลาแบ่งหน้า
     .range(from, from + PAGE - 1);
@@ -124,9 +156,11 @@ async function fetchAll(): Promise<Voc[]> {
   const { count, error: cErr } = await sb
     .from('voc_record').select('id', { count: 'exact', head: true });
 
+  const sel = await cols(sb);
+
   if (!cErr && count != null) {
     const pages = Math.min(Math.max(1, Math.ceil(count / PAGE)), MAX_PAGES);
-    const res = await Promise.all(Array.from({ length: pages }, (_, i) => page(sb, i * PAGE)));
+    const res = await Promise.all(Array.from({ length: pages }, (_, i) => page(sb, i * PAGE, sel)));
     const out: Voc[] = [];
     for (const { data, error } of res) {
       if (error) { console.error('Supabase error:', error.message); return out.length ? out : MOCK; }
@@ -139,7 +173,7 @@ async function fetchAll(): Promise<Voc[]> {
   console.error('Supabase count error:', cErr?.message);
   const out: Voc[] = [];
   for (let i = 0; i < MAX_PAGES; i++) {
-    const { data, error } = await page(sb, i * PAGE);
+    const { data, error } = await page(sb, i * PAGE, sel);
     if (error) { console.error('Supabase error:', error.message); return out.length ? out : MOCK; }
     const batch = data ?? [];
     out.push(...batch.map(mapRow));

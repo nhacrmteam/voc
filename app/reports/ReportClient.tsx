@@ -14,6 +14,7 @@ import { buildExec, buildChannel, buildWatch, buildStrength, plainReports, type 
 import { buildInfographicSvg, type InfoMeta } from '../../lib/reportInfographic';
 import { exportCSV, exportXLSX, exportPDFDoc, exportInfographicPNG, exportInfographicPDF } from './exportKit';
 import EmptyState from '../components/EmptyState';
+import { IS_DEMO, DEMO_FY, DEMO_QUARTER } from '../../lib/demo';
 
 const QUARTERS = [
   { k: 'year', label: 'ทั้งปี (สะสม)' }, { k: 'q1', label: 'ไตรมาส 1 (ต.ค.–ธ.ค.)' }, { k: 'q2', label: 'ไตรมาส 2 (ม.ค.–มี.ค.)' },
@@ -57,7 +58,10 @@ export default function ReportClient({ rows }: { rows: Voc[] }) {
   const [today, setToday] = useState('');
 
   useEffect(() => {
-    const c = currentFYQuarter(); setMaxFY(c.be); setBeYear(c.be); setQuarter(c.q);
+  // เว็บสาธิต: ตั้งช่วงเวลาเริ่มต้นเป็น "ทั้งหมด (ตั้งแต่มีระบบ)" ไม่ใช่ไตรมาสปัจจุบัน
+  //   ข้อมูลจำลองอยู่ในปีงบ 2567-2569 ถ้าใช้ไตรมาสปัจจุบันผู้ชมจะเปิดมาเจอ 0 รายการ
+  //   และค่า "ทั้งหมด" ทำให้ยอดรวมบนหน้าจอตรงกับ 10,012 ที่อ้างไว้ในเล่มคู่มือ
+    const c = currentFYQuarter(); setMaxFY(c.be); setBeYear(IS_DEMO ? DEMO_FY : c.be); setQuarter(IS_DEMO ? DEMO_QUARTER : c.q);
     // คำนวณวันที่ฝั่งเบราว์เซอร์เท่านั้น — ถ้าเรนเดอร์ฝั่งเซิร์ฟเวอร์ด้วยจะได้คนละค่าแล้ว hydrate ไม่ตรง
     setToday(new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }));
   }, []);

@@ -7,6 +7,9 @@ import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { JOURNEYS, projectTypeOf } from '../../lib/data';
 import { analyzeText, analyzeSmartBatch, applyScoreHint, SmartResult } from '../../lib/ai';
+import { maskPII, summarizePII, type PiiHit } from '../../lib/pii';
+import { IS_DEMO } from '../../lib/demo';
+import DemoBlocked from '../DemoBlocked';
 
 // ช่องทาง 8 ช่อง (id ตรงตาราง channel ใน Supabase)
 const CH = [
@@ -66,6 +69,8 @@ const HKEY = {
   src: ['แหล่ง', 'ที่มา', 'ช่องทาง', 'source'],
   jr: ['journey', 'ขั้นตอน'],
   proj: ['โครงการ', 'หมู่บ้าน', 'ชุมชน', 'project'],
+  // เลขรับเรื่องต้นทาง — ใช้ตามรอยกลับไปหาผู้แจ้งที่ทะเบียนต้นทาง แทนการเก็บชื่อ
+  ref: ['เลขรับเรื่อง', 'เลขที่รับ', 'เลขรับ', 'เลขที่หนังสือ', 'เลขที่เรื่อง', 'เลขอ้างอิง', 'เลขที่อ้างอิง', 'ticket', 'case id', 'case no'],
 };
 function findCol(head: string[], keys: string[], skip: number[] = []): number {
   const low = head.map(h => (h || '').toLowerCase());
@@ -215,7 +220,7 @@ function profileColumns(grid: string[][], headRow: number): ColInfo[] {
 
 // ---------- จำการจับคู่คอลัมน์ต่อช่องทาง (ไฟล์รอบหน้าของแหล่งเดิมจับคู่ให้เอง) ----------
 // เก็บเป็น "ชื่อหัวคอลัมน์" ไม่ใช่ตำแหน่ง — สลับลำดับคอลัมน์แล้วยังจำได้
-interface SavedMap { text: string[]; score: string[]; date: string; topic: string; src: string; jr: string; proj?: string }
+interface SavedMap { text: string[]; score: string[]; date: string; topic: string; src: string; jr: string; proj?: string; ref?: string }
 const MAP_KEY = 'voc-colmap-';
 function loadSavedMap(chId: string): SavedMap | null {
   try { const s = localStorage.getItem(MAP_KEY + chId); return s ? JSON.parse(s) as SavedMap : null; } catch { return null; }
@@ -241,14 +246,17 @@ function cellScore(v: string, info: ColInfo): number | null {
   return null;
 }
 
-interface ColMap { date: number; topic: number; src: number; jr: number; proj: number }
-interface Parsed { occurred: string; topic: string; text: string; source: string; journey: string; project: string; score: number | null; err: string }
+interface ColMap { date: number; topic: number; src: number; jr: number; proj: number; ref: number }
+// pii = รายการข้อมูลส่วนบุคคลที่ถูกกลบไปจากแถวนี้ (เก็บไว้รายงานให้ผู้นำเข้าเห็นก่อนกดบันทึก)
+interface Parsed { occurred: string; topic: string; text: string; source: string; journey: string; project: string; score: number | null; err: string; pii: PiiHit[]; sourceRef: string }
 
 const inp: React.CSSProperties = { padding: '9px 11px', border: '1px solid #dfe6f0', borderRadius: 8, fontSize: 13.5, fontFamily: 'inherit', background: '#fff' };
 const cellInp: React.CSSProperties = { padding: '5px 7px', border: '1px solid var(--line)', borderRadius: 6, fontSize: 12.5, fontFamily: 'inherit', background: 'var(--card,#fff)', color: 'inherit' };
 interface UploadLog { id: string; file_name: string | null; channel_id: string; total: number; ok_count: number; created_at: string; profiles?: { full_name: string | null } | { full_name: string | null }[] }
 
 export default function ImportPage() {
+  // เว็บสาธิต: ปิดหน้านี้ (ชั้นสำรองของ middleware)
+  if (IS_DEMO) return <DemoBlocked title="นำเข้าข้อมูล" />;
   const [role, setRole] = useState<string | null>(null);
   const [chId, setChId] = useState('web');
   const [source, setSource] = useState('Website');
@@ -266,7 +274,7 @@ export default function ImportPage() {
   const [textCols, setTextCols] = useState<number[]>([]);   // คอลัมน์ข้อความ (เลือกได้หลายช่อง → แยกเป็นหลายเสียง)
   const [scoreCols, setScoreCols] = useState<number[]>([]); // คอลัมน์คะแนนความพึงพอใจ
   const [useScore, setUseScore] = useState(true);
-  const [cmap, setCmap] = useState<ColMap>({ date: -1, topic: -1, src: -1, jr: -1, proj: -1 });
+  const [cmap, setCmap] = useState<ColMap>({ date: -1, topic: -1, src: -1, jr: -1, proj: -1, ref: -1 });
   // ตรวจคุณภาพก่อนบันทึก: จับคู่โครงการ + หาแถวที่ซ้ำกับข้อมูลเดิม
   const [checking, setChecking] = useState(false);
   const [projHit, setProjHit] = useState<Map<string, string>>(new Map());   // ชื่อในไฟล์ → project.id
@@ -424,6 +432,7 @@ export default function ImportPage() {
       src: findCol(head, HKEY.src, used),
       jr: findCol(head, HKEY.jr, used),
       proj: findCol(head, HKEY.proj, used),
+      ref: findCol(head, HKEY.ref, used),
     });
 
     // ถ้าเคยจับคู่ช่องทางนี้ไว้แล้วและชื่อคอลัมน์ตรงกัน → ใช้ของเดิมทับผลตรวจจับ
@@ -438,6 +447,7 @@ export default function ImportPage() {
         setCmap({
           date: idxOfName(info, saved.date), topic: idxOfName(info, saved.topic),
           src: idxOfName(info, saved.src), jr: idxOfName(info, saved.jr), proj: idxOfName(info, saved.proj || ''),
+          ref: idxOfName(info, saved.ref || ''),
         });
       }
     }
@@ -481,15 +491,25 @@ export default function ImportPage() {
         const text = cell(r, c);
         if (!text) return;
         const colName = (cols[c]?.name || '').trim();
+        // 🔒 PDPA — กลบข้อมูลส่วนบุคคล "ตั้งแต่ตอนอ่านไฟล์" ก่อนทุกขั้นตอนถัดไป
+        //    ทำตรงนี้จุดเดียว ข้อความที่ยังไม่กลบจึงไม่ไปถึงตารางพรีวิว การตรวจซ้ำ
+        //    การวิเคราะห์ด้วย LLM และฐานข้อมูล — ข้อความดิบไม่เคยออกจากเบราว์เซอร์
+        //    ⚠️ ห้ายกการกลบไปไว้ตอน save() เพราะข้อความถูกส่งให้ LLM ก่อน insert
+        const mText = maskPII(text);
+        const mTopic = maskPII(baseTopic || colName.slice(0, 120));
+        // เลขรับเรื่องไม่ใช่ข้อมูลส่วนบุคคล แต่กลบไว้ด้วยกันพลาด เผื่อจับคู่คอลัมน์ผิดไปโดนคอลัมน์ชื่อ
+        const mRef = maskPII(cell(r, cmap.ref));
         const p: Parsed = {
           occurred,
-          topic: baseTopic || colName.slice(0, 120),
-          text,
+          topic: mTopic.masked,
+          text: mText.masked,
           source: cell(r, cmap.src),
           journey: (JOURNEYS as readonly string[]).includes(jr) ? jr : '',
           project: projName,
           score,
           err: '',
+          pii: [...mText.hits, ...mTopic.hits, ...mRef.hits],
+          sourceRef: mRef.masked,
         };
         p.err = validateRow(p);
         out.push(p);
@@ -509,6 +529,13 @@ export default function ImportPage() {
   function editRow(i: number, key: keyof Parsed, value: string) {
     setRows(rs => rs.map((r, idx) => {
       if (idx !== i) return r;
+      // 🔒 PDPA — ผู้ใช้พิมพ์แก้เองก็ต้องกลบซ้ำ ไม่งั้นเป็นช่องให้ข้อมูลส่วนบุคคลเข้าฐานได้
+      if (key === 'text' || key === 'topic') {
+        const m = maskPII(value);
+        const nr = { ...r, [key]: m.masked, pii: [...r.pii, ...m.hits] };
+        nr.err = validateRow(nr);
+        return nr;
+      }
       const nr = { ...r, [key]: value };
       nr.err = validateRow(nr);
       return nr;
@@ -518,6 +545,11 @@ export default function ImportPage() {
 
   const ok = rows.filter(r => !r.err);
   const bad = rows.filter(r => r.err);
+  // สรุปการกลบข้อมูลส่วนบุคคล — ต้องให้ผู้นำเข้าเห็นก่อนกดบันทึก ไม่ใช่กลบเงียบ ๆ
+  const piiHits = rows.flatMap(r => r.pii);
+  const piiRows = rows.filter(r => r.pii.length > 0).length;
+  const piiSummary = summarizePII(piiHits);
+  const refCount = rows.filter(r => r.sourceRef).length;
   const dupCount = ok.filter(r => dupTexts.has(r.text)).length;
   // แถวที่จะบันทึกจริง (ตัดแถวซ้ำออกถ้าเลือกข้าม)
   const okSave = skipDup ? ok.filter(r => !dupTexts.has(r.text)) : ok;
@@ -630,6 +662,11 @@ export default function ImportPage() {
         occurred_at: r.occurred,          // วันที่เกิดเรื่อง (ต้นทาง — มากับไฟล์)
         is_imported: true,                 // นำเข้าจากไฟล์ (imported_at = now อัตโนมัติ)
         owner_dept: ai[i].owner,           // จับคู่ฝ่ายรับผิดชอบตามประเภทเสียง
+        // บันทึกค่าที่ระบบเสนอไว้ต่างหาก — เจ้าหน้าที่แก้ owner_dept ได้ แต่ค่านี้ต้องคงเดิมตลอดไป
+        // ไม่งั้นวัด "ส่งถึงฝ่ายถูกต้องตั้งแต่ครั้งแรก" ไม่ได้ (ดู supabase_owner_dept_tracking.sql)
+        owner_dept_ai: ai[i].owner,
+        // เลขรับเรื่องต้นทาง — ใช้แทนชื่อผู้แจ้ง (ดู supabase_source_ref.sql)
+        source_ref: r.sourceRef || null,
         created_by: u.user?.id ?? null,
       }));
       // แบ่งชุดละ 100 แถว + บันทึกผลวิเคราะห์ AI ลงตาราง analysis คู่กัน
@@ -637,8 +674,8 @@ export default function ImportPage() {
         const chunk = payload.slice(i, i + 100);
         let { data: ins, error } = await supabase.from('voc_record').insert(chunk).select('id, ref_code');
         // ยังไม่ได้รัน supabase_import_quality.sql → ไม่มีคอลัมน์ batch_id
-        if (error && /batch_id|column/i.test(error.message || '')) {
-          const legacy = chunk.map(({ batch_id, ...rest }) => rest);
+        if (error && /batch_id|owner_dept_ai|source_ref|column/i.test(error.message || '')) {
+          const legacy = chunk.map(({ batch_id, owner_dept_ai, source_ref, ...rest }) => rest);
           ({ data: ins, error } = await supabase.from('voc_record').insert(legacy).select('id, ref_code'));
         }
         if (error) throw error;
@@ -674,6 +711,7 @@ export default function ImportPage() {
         score: scoreCols.map(i => nameOf(cols, i)).filter(Boolean),
         date: nameOf(cols, cmap.date), topic: nameOf(cols, cmap.topic),
         src: nameOf(cols, cmap.src), jr: nameOf(cols, cmap.jr), proj: nameOf(cols, cmap.proj),
+        ref: nameOf(cols, cmap.ref),
       });
 
       loadHistory();
@@ -856,6 +894,7 @@ export default function ImportPage() {
                 ['topic', 'หัวข้อ/ประเด็น'],
                 ['src', 'แหล่งที่มา'],
                 ['proj', 'โครงการ'],
+                ['ref', 'เลขรับเรื่องต้นทาง'],
                 ['jr', 'เส้นทางลูกค้า (Journey)'],
               ] as const).map(([k, label]) => (
                 <label key={k} className="imp-field">
@@ -931,8 +970,52 @@ export default function ImportPage() {
               <div className="imp-chip"><div className="n" style={{ color: 'var(--iok)' }}>{okSave.length.toLocaleString()}</div><div className="l">จะบันทึกจริง</div></div>
               <div className="imp-chip"><div className="n" style={{ color: bad.length ? 'var(--ibad)' : undefined }}>{bad.length.toLocaleString()}</div><div className="l">ต้องแก้ไข</div></div>
               <div className="imp-chip"><div className="n" style={{ color: dupCount ? '#92400e' : undefined }}>{dupCount.toLocaleString()}</div><div className="l">ซ้ำกับของเดิม</div></div>
+              <div className="imp-chip"><div className="n" style={{ color: refCount ? undefined : 'var(--muted)' }}>{refCount.toLocaleString()}</div><div className="l">มีเลขรับเรื่อง</div></div>
               <div className="imp-chip"><div className="n">{ch.name.slice(0, 14)}</div><div className="l">ช่องทางปลายทาง</div></div>
             </div>
+
+            {/* 🔒 การกลบข้อมูลส่วนบุคคล — รายงานให้เห็นก่อนกดบันทึกเสมอ ไม่กลบเงียบ ๆ */}
+            <div className={'imp-alert ' + (piiHits.length ? 'ok' : 'info')}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                🔒 การคุ้มครองข้อมูลส่วนบุคคล (PDPA)
+              </div>
+              {piiHits.length > 0 ? (
+                <>
+                  <div>
+                    กลบข้อมูลส่วนบุคคลแล้ว <b>{piiHits.length.toLocaleString()}</b> จุด
+                    จาก <b>{piiRows.toLocaleString()}</b> แถว — ข้อความที่จะบันทึกลงฐานข้อมูลคือข้อความที่เห็นในตารางด้านล่างนี้
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                    {Object.entries(piiSummary).sort((a, b) => b[1] - a[1]).map(([kind, n]) => (
+                      <span key={kind} style={{
+                        fontSize: 12.5, fontWeight: 600, padding: '3px 10px', borderRadius: 999,
+                        background: 'rgba(0,0,0,.06)', whiteSpace: 'nowrap',
+                      }}>{kind} {n.toLocaleString()}</span>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div>ตรวจแล้วไม่พบข้อมูลส่วนบุคคลในไฟล์นี้ — ข้อความถูกบันทึกตามต้นฉบับ</div>
+              )}
+              <div style={{ marginTop: 8, opacity: .85, fontSize: 12.5, lineHeight: 1.8 }}>
+                กลบตั้งแต่ตอนอ่านไฟล์ในเครื่องคุณ ก่อนส่งให้ AI วิเคราะห์และก่อนบันทึกลงฐานข้อมูล
+                — ข้อความต้นฉบับที่ยังไม่กลบไม่ถูกส่งออกจากเบราว์เซอร์เลย
+                <br />ตรวจประเภทที่กลบ: ชื่อ-สกุล · ที่อยู่ · เบอร์โทร · อีเมล · เลขบัตรประชาชน · เลขที่บัญชี · ทะเบียนรถ · ไอดีโซเชียล · ลิงก์โปรไฟล์
+                <br /><b>ยังต้องอ่านไฟล์ต้นทางด้วยตาก่อนนำเข้าเสมอ</b> การกลบอัตโนมัติเป็นการลดความเสี่ยง ไม่ใช่การรับประกัน
+              </div>
+            </div>
+
+            {/* ไม่มีเลขรับเรื่อง = ตามรอยกลับไปหาผู้แจ้งไม่ได้เลย เพราะชื่อถูกกลบไปแล้ว */}
+            {!checking && cmap.ref < 0 && (
+              <div className="imp-alert warn">
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>🔗 ยังไม่ได้เลือกคอลัมน์ &ldquo;เลขรับเรื่องต้นทาง&rdquo;</div>
+                ระบบนี้กลบชื่อผู้แจ้งก่อนบันทึกเสมอ <b>เลขรับเรื่องจึงเป็นทางเดียวที่จะตามกลับไปหาผู้ร้องเรียนได้</b>
+                เมื่อต้องติดต่อกลับหรือแจ้งผลการดำเนินการ
+                <div style={{ marginTop: 6, opacity: .9 }}>
+                  ถ้าไฟล์ต้นทางมีคอลัมน์นี้ ให้ย้อนกลับไปเลือกในขั้นจับคู่คอลัมน์ · ถ้าไม่มีจริง ๆ นำเข้าต่อได้ แต่เสียงกลุ่มนี้จะตามรอยกลับไม่ได้
+                </div>
+              </div>
+            )}
 
             {checking && <div className="imp-alert info">⏳ กำลังตรวจข้อมูลซ้ำและจับคู่โครงการ…</div>}
 

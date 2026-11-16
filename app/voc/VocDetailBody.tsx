@@ -7,6 +7,8 @@ import { journeyLabel, JOURNEY_DESC } from '../../lib/data';
 import { scoreTopics, scoreBand, FACTORS, W } from '../../lib/priority';
 import { vocHref, ALL_TIME } from '../../lib/vocLink';
 import { dim2Cat, dim3Cat, custGroupOf, DIM3_COLOR } from '../../lib/dimensions';
+// client component — import เข้ามาในไฟล์ที่ไม่มี 'use client' ได้ Next จะตัดขอบเขตให้เอง
+import OwnerDeptFix from './OwnerDeptFix';
 
 export default function VocDetailBody({ r, rows, onNavigate, period = ALL_TIME }: {
   r: Voc;
@@ -44,8 +46,25 @@ export default function VocDetailBody({ r, rows, onNavigate, period = ALL_TIME }
                 {JOURNEY_DESC[r.journey] && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{JOURNEY_DESC[r.journey]}</div>}
               </td></tr>
             <tr><th>หัวข้อ</th><td colSpan={3}>{r.topic}</td></tr>
+            {/* เลขรับเรื่องต้นทาง — ใช้ตามรอยกลับไปหาผู้แจ้งที่ทะเบียนต้นทาง
+                ระบบนี้กลบชื่อผู้แจ้งก่อนบันทึกเสมอ จึงไม่มีชื่อให้แสดงโดยตั้งใจ */}
+            <tr>
+              <th>เลขรับเรื่องต้นทาง</th>
+              <td colSpan={3}>
+                {r.sourceRef
+                  ? <><b style={{ fontFamily: 'ui-monospace,monospace' }}>{r.sourceRef}</b>
+                      <span style={{ fontSize: 12, color: 'var(--muted)' }}> — เปิดทะเบียนรับเรื่องต้นทางด้วยเลขนี้ เพื่อดูผู้แจ้งและติดต่อกลับ</span></>
+                  : <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>
+                      ไม่มี — ไฟล์ต้นทางไม่ได้ส่งเลขรับเรื่องมา จึงตามกลับไปหาผู้แจ้งไม่ได้
+                    </span>}
+              </td>
+            </tr>
             <tr><th>Sentiment</th><td><span className={'pill ' + sp}>{r.sentiment}</span></td><th>ความรุนแรง (Priority)</th><td><span className={'pill ' + pp}>{r.priority}</span></td></tr>
-            <tr><th>ฝ่ายที่เกี่ยวข้อง</th><td>{r.owner}</td><th>หมวด AI (ผลิตภัณฑ์)</th><td>{r.catProduct}</td></tr>
+            <tr>
+              <th>ฝ่ายที่เกี่ยวข้อง</th>
+              <td><OwnerDeptFix id={r.id} owner={r.owner} ownerAi={r.ownerAi} ownerFixed={r.ownerFixed} /></td>
+              <th>หมวด AI (ผลิตภัณฑ์)</th><td>{r.catProduct}</td>
+            </tr>
             <tr><th>หมวด AI (สนับสนุนขาย)</th><td>{r.catSales}</td><th>ความเชื่อมั่น AI</th><td>{r.sentConf}%{r.sentManual ? ' · ✔ ยืนยันโดยเจ้าหน้าที่' : r.sentUncertain ? ' · ⚠ AI ไม่แน่ใจ' : ''}</td></tr>
             {/* กรอบ 4 มิติของ กคช. — มิติ 1 อยู่ที่ "เส้นทางลูกค้า" · มิติ 2/3/4 สรุปไว้บรรทัดนี้ (ดูภาพรวมได้ที่เมนู 🧭 วิเคราะห์ 4 มิติ) */}
             <tr>

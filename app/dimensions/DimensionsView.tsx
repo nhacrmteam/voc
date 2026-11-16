@@ -19,6 +19,7 @@ import {
 } from '../../lib/dimensions';
 import VocModal from '../voc/VocModal';
 import EmptyState from '../components/EmptyState';
+import { IS_DEMO, DEMO_FY, DEMO_QUARTER } from '../../lib/demo';
 
 const QUARTERS: { k: string; label: string }[] = [
   { k: 'year', label: 'ทั้งปี (สะสม)' },
@@ -101,7 +102,10 @@ export default function DimensionsView({ rows }: { rows: Voc[] }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [group, setGroup] = useState<string>(CUST_GROUPS[2].key);
 
-  useEffect(() => { const { be, q } = currentFYQuarter(); setMaxFY(be); setBeYear(be); setQuarter(q); }, []);
+  // เว็บสาธิต: ตั้งช่วงเวลาเริ่มต้นเป็น "ทั้งหมด (ตั้งแต่มีระบบ)" ไม่ใช่ไตรมาสปัจจุบัน
+  //   ข้อมูลจำลองอยู่ในปีงบ 2567-2569 ถ้าใช้ไตรมาสปัจจุบันผู้ชมจะเปิดมาเจอ 0 รายการ
+  //   และค่า "ทั้งหมด" ทำให้ยอดรวมบนหน้าจอตรงกับ 10,012 ที่อ้างไว้ในเล่มคู่มือ
+  useEffect(() => { const { be, q } = currentFYQuarter(); setMaxFY(be); setBeYear(IS_DEMO ? DEMO_FY : be); setQuarter(IS_DEMO ? DEMO_QUARTER : q); }, []);
   const YEARS = [maxFY, maxFY - 1, maxFY - 2];
   const allTime = beYear === 0;
   const period = { fy: beYear, qt: quarter };
