@@ -85,6 +85,9 @@ function smoothPath(pts: [number, number][]): string {
  * กราฟผสม: แท่ง = จำนวนเสียง · เส้นโค้ง = %เชิงบวก / %เชิงลบ (แกน % อยู่ขวา)
  * เดือนที่ยังไม่มีข้อมูลจะไม่ลากเส้น % ลงศูนย์ แต่ตัดช่วงเส้นแทน — กราฟจึงไม่หักแหลมผิดความหมาย
  */
+// ⚠️ <title> ใน SVG ต้องมี "ข้อความชิ้นเดียว" เสมอ — เขียนเป็น {`...`} ไม่ใช่ {a}: {b} ปน ๆ กัน
+//    ถ้าใส่หลายชิ้น ฝั่งเซิร์ฟเวอร์จะเรนเดอร์ออกมาเป็น <title></title> ว่าง ๆ แต่เบราว์เซอร์ใส่ข้อความให้
+//    React จึงฟ้อง hydration error (#418/#422) และคำอธิบายตอนชี้เมาส์ก็หายไปในการโหลดครั้งแรก
 function TrendCombo({ data }: { data: { label: string; n: number; pos: number; neg: number }[] }) {
   const W = 780, H = 280, L = 52, R = 44, T = 22, B = 40;
   const iw = W - L - R, ih = H - T - B;
@@ -138,7 +141,7 @@ function TrendCombo({ data }: { data: { label: string; n: number; pos: number; n
           <g key={d.label + i}>
             <rect x={x(i) - bw / 2} y={yN(d.n)} width={bw} height={Math.max(2, T + ih - yN(d.n))}
               fill="url(#barGrad)" rx={4}>
-              <title>{d.label}: {d.n.toLocaleString()} เสียง · บวก {d.pos}% · ลบ {d.neg}%</title>
+              <title>{`${d.label}: ${d.n.toLocaleString()} เสียง · บวก ${d.pos}% · ลบ ${d.neg}%`}</title>
             </rect>
             <text x={x(i)} y={yN(d.n) - 6} textAnchor="middle" fontSize={10} fontWeight={600} fill="#5578c4">{d.n.toLocaleString()}</text>
           </g>
@@ -152,8 +155,8 @@ function TrendCombo({ data }: { data: { label: string; n: number; pos: number; n
         )))}
         {data.map((d, i) => d.n > 0 && (
           <g key={'pt' + i}>
-            <circle cx={x(i)} cy={yP(d.pos)} r={4} fill="#fff" stroke={SENT_COLOR.pos} strokeWidth={2.2}><title>{d.label}: เชิงบวก {d.pos}%</title></circle>
-            <circle cx={x(i)} cy={yP(d.neg)} r={4} fill="#fff" stroke={SENT_COLOR.neg} strokeWidth={2.2}><title>{d.label}: เชิงลบ {d.neg}%</title></circle>
+            <circle cx={x(i)} cy={yP(d.pos)} r={4} fill="#fff" stroke={SENT_COLOR.pos} strokeWidth={2.2}><title>{`${d.label}: เชิงบวก ${d.pos}%`}</title></circle>
+            <circle cx={x(i)} cy={yP(d.neg)} r={4} fill="#fff" stroke={SENT_COLOR.neg} strokeWidth={2.2}><title>{`${d.label}: เชิงลบ ${d.neg}%`}</title></circle>
           </g>
         ))}
 
@@ -192,7 +195,7 @@ function SentDonut({ pos, neu, neg }: { pos: number; neu: number; neg: number })
         {total > 0 && segs.map(s => {
           const p = s.v / total * 100;
           const el = <circle key={s.lab} cx="21" cy="21" r="15.915" fill="none" stroke={s.c} strokeWidth="6"
-            strokeDasharray={`${p} ${100 - p}`} strokeDashoffset={25 - acc} ><title>{s.lab} {s.v.toLocaleString()} ({Math.round(p)}%)</title></circle>;
+            strokeDasharray={`${p} ${100 - p}`} strokeDashoffset={25 - acc} ><title>{`${s.lab} ${s.v.toLocaleString()} (${Math.round(p)}%)`}</title></circle>;
           acc += p;
           return el;
         })}
@@ -348,20 +351,27 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
 
   // ---- แนวโน้มรายเดือน + sentiment (12 เดือนของปีงบที่เลือก / 12 เดือนล่าสุดถ้าเลือกทั้งหมด) ----
   const TH_MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  // คีย์เดือน "YYYY-MM" จากเวลาท้องถิ่น — ห้ามใช้ toISOString() ตรงนี้
+  //
+  // new Date(ปี, เดือน, 1) ได้เที่ยงคืนตาม "เวลาเครื่อง" แต่ toISOString() แปลงกลับเป็นเวลา UTC
+  // เครื่องที่ตั้งเวลาไทย (+7) จึงถอยไปเป็นวันสุดท้ายของเดือนก่อน = คีย์เดือนเลื่อนไป 1 เดือน
+  // ผลคือกราฟแนวโน้มเขียนป้ายว่า "พ.ย." แต่นับข้อมูลของเดือน ต.ค. (ป้ายใช้ getMonth() ซึ่งถูก
+  // แต่คีย์ใช้ UTC ซึ่งผิด ทั้งคู่จึงไม่ตรงกัน) และทำให้ฝั่งเซิร์ฟเวอร์กับเบราว์เซอร์วาดไม่เหมือนกัน
+  const ymKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   const monthly = useMemo(() => {
     const months: { key: string; label: string }[] = [];
     if (allTime) {
       const end = new Date(anchor);
       for (let i = 11; i >= 0; i--) {
         const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
-        months.push({ key: d.toISOString().slice(0, 7), label: TH_MON[d.getMonth()] });
+        months.push({ key: ymKey(d), label: TH_MON[d.getMonth()] });
       }
     } else {
       // ปีงบเริ่ม ต.ค. ของปี (beYear-543-1) → ก.ย. ของปี (beYear-543)
       const startY = beYear - 543 - 1;
       for (let i = 0; i < 12; i++) {
         const d = new Date(startY, 9 + i, 1);
-        months.push({ key: d.toISOString().slice(0, 7), label: TH_MON[d.getMonth()] });
+        months.push({ key: ymKey(d), label: TH_MON[d.getMonth()] });
       }
     }
     return months.map(m => {

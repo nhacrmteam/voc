@@ -16,7 +16,7 @@ export default function TrendChart({ points, color = '#1f3a93' }: { points: { la
         <polyline points={line} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" />
         {points.map((p, i) => (
           <circle key={i} cx={X(i)} cy={Y(p.value)} r={2.6} fill={color}>
-            <title>{p.label}: {p.value} รายการ</title>
+            <title>{`${p.label}: ${p.value} รายการ`}</title>
           </circle>
         ))}
       </svg>

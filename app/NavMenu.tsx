@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { IS_DEMO, isDemoBlocked } from '../lib/demo';
+import { IS_DEMO } from '../lib/demo';
 
 const ITEMS: { href: string; label: string; staffOnly?: boolean; adminOnly?: boolean }[] = [
   { href: '/dashboard', label: '📊 ภาพรวม' },
@@ -43,9 +43,8 @@ export default function NavMenu() {
   return (
     <nav className="nav">
       {ITEMS.filter(it => {
-        // เว็บสาธิต: ซ่อนทุกเมนูที่เขียนข้อมูลได้ (นำเข้าข้อมูล · จัดการระบบ · คิวรอยืนยัน)
-        // ด่านจริงอยู่ที่ middleware + ฐานสาธิตอ่านอย่างเดียว ตรงนี้คือไม่ให้เห็นปุ่มที่กดแล้วไม่ได้ผล
-        if (IS_DEMO && isDemoBlocked(it.href)) return false;
+        // เว็บสาธิตแสดงเมนูครบเหมือนระบบจริง — ทุกหน้าเปิดดูได้แต่แก้ไขไม่ได้
+        // (ด่านที่กันการแก้ไขจริงคือฐานสาธิตถูกถอนสิทธิ์เขียน ไม่ใช่การซ่อนเมนู)
         if (it.staffOnly && role === 'executive') return false;
         if (it.adminOnly && role !== 'admin' && role !== '') return false;  // '' = โหมดสาธิต แสดงทุกเมนู
         return true;

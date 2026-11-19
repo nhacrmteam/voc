@@ -6,7 +6,6 @@ import { supabase } from '../../lib/supabaseClient';
 import { DEPT_GROUPS, journeyLabel } from '../../lib/data';
 import { pingLLM, LlmPing } from '../../lib/ai';
 import { IS_DEMO } from '../../lib/demo';
-import DemoBlocked from '../DemoBlocked';
 
 const ROLE_TH: Record<string, string> = { pending: 'รออนุมัติ', admin: 'แอดมิน', operator: 'ผู้ปฏิบัติงาน', executive: 'ผู้บริหาร' };
 const ROLE_RIGHT: Record<string, string> = {
@@ -57,8 +56,6 @@ function genSecret() {
 const sel: React.CSSProperties = { padding: '6px 9px', border: '1px solid #dfe6f0', borderRadius: 8, fontSize: 12.5, fontFamily: 'inherit', background: '#fff' };
 
 export default function AdminPage() {
-  // เว็บสาธิต: ปิดหน้านี้ (ชั้นสำรองของ middleware)
-  if (IS_DEMO) return <DemoBlocked title="จัดการระบบ" />;
   const [role, setRole] = useState<string | null>(null);
   const [me, setMe] = useState('');
   const [users, setUsers] = useState<Profile[]>([]);
@@ -78,6 +75,19 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
+    // เว็บสาธิต: เห็นหน้าจอจัดการระบบจริง แต่ไม่โหลดตารางผู้ใช้
+    // (เว็บสาธิตใครเปิดก็ได้ จึงไม่ควรมีชื่อ-อีเมลเจ้าหน้าที่จริงอยู่บนนั้น)
+    // จำนวนเรื่องต่อช่องทางยังโหลดจากฐานสาธิต เพื่อให้ตัวเลขบนหน้าจอเป็นของจริงไม่ใช่ขีดกลาง
+    if (IS_DEMO) {
+      setRole('demo');
+      if (supabase) {
+        Promise.all(CHANNELS.map(async ch => {
+          const { count } = await supabase!.from('voc_record').select('id', { count: 'exact', head: true }).eq('channel_id', ch.id);
+          return [ch.id, count ?? 0] as const;
+        })).then(pairs => setCounts(Object.fromEntries(pairs)));
+      }
+      return;
+    }
     if (!supabase) { setRole('mock'); setUsers(MOCK_USERS as any); return; }
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { setRole('none'); return; }
@@ -132,9 +142,10 @@ export default function AdminPage() {
   }
 
   const pendingCount = users.filter(u => u.role === 'pending').length;
+  const ro = role === 'demo';   // เว็บสาธิต = ดูอย่างเดียว ปิดทุกปุ่มที่เขียนค่าลงระบบ
 
   if (role === null) return <div className="content" style={{ padding: 24 }}>กำลังโหลด…</div>;
-  if (role !== 'admin' && role !== 'mock') {
+  if (role !== 'admin' && role !== 'mock' && role !== 'demo') {
     return (
       <>
         <header className="top"><h1>จัดการระบบ (Admin Console)</h1></header>
@@ -145,32 +156,53 @@ export default function AdminPage() {
 
   return (
     <>
-      <header className="top"><h1>⚙️ จัดการระบบ (Admin Console)</h1><div className="sub">ผู้ใช้/บทบาท · การเชื่อมต่อช่องทาง · Data Mapping{role === 'mock' ? ' · (โหมดสาธิต)' : ''}</div></header>
+      <header className="top"><h1>⚙️ จัดการระบบ (Admin Console)</h1><div className="sub">ผู้ใช้/บทบาท · การเชื่อมต่อช่องทาง · Data Mapping{role === 'mock' ? ' · (โหมดสาธิต)' : ''}{role === 'demo' ? ' · เว็บสาธิต (ดูอย่างเดียว)' : ''}</div></header>
       <div className="content">
+        {ro && <div className="imp-alert warn" style={{ marginBottom: 14 }}>👁️ เว็บสาธิต — หน้านี้คือหน้าจัดการระบบจริง เปิดดูได้ทุกส่วน แต่ปิดปุ่มที่บันทึกค่าลงระบบไว้ทั้งหมด</div>}
         {msg && <div className="card" style={{ color: '#15803d' }}>✓ {msg}</div>}
         {err && <div className="card" style={{ color: '#b91c1c' }}>{err}</div>}
 
-        {/* ผู้ใช้งานและบทบาท */}
-        <div className="card">
-          <h3>👥 ผู้ใช้งานและบทบาท {pendingCount > 0 && <span style={{ fontSize: 12.5, color: '#b45309', background: '#fef3c7', padding: '2px 9px', borderRadius: 20, marginLeft: 6 }}>⏳ รออนุมัติ {pendingCount}</span>}</h3>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>ผู้ใช้ใหม่สมัครผ่านหน้า &ldquo;สมัครใช้งาน&rdquo; และเริ่มต้นเป็น &ldquo;รออนุมัติ&rdquo; เสมอ — เลือกบทบาทให้ที่นี่เพื่อเปิดสิทธิ์เข้าใช้งาน</div>
-          <table className="tcards">
-            <thead><tr><th>ผู้ใช้</th><th>อีเมล</th><th>หน่วยงาน</th><th>บทบาท</th><th>สิทธิ์</th></tr></thead>
-            <tbody>{users.slice().sort((a, b) => (a.role === 'pending' ? -1 : 0) - (b.role === 'pending' ? -1 : 0)).map(u => (
-              <tr key={u.id} style={u.role === 'pending' ? { background: '#fffbeb' } : undefined}>
-                <td data-label="ผู้ใช้">{u.full_name || '-'}{u.id === me ? ' (คุณ)' : ''}</td>
-                <td data-label="อีเมล">{u.email || '-'}</td>
-                <td data-label="หน่วยงาน">{u.dept || '-'}</td>
-                <td data-label="บทบาท">
-                  <select style={sel} value={u.role} onChange={e => changeRole(u.id, e.target.value)}>
-                    {Object.keys(ROLE_TH).map(r => <option key={r} value={r}>{ROLE_TH[r]}</option>)}
-                  </select>
-                </td>
-                <td className="cell-wrap" data-label="สิทธิ์" style={{ fontSize: 12 }}>{ROLE_RIGHT[u.role] || '-'}</td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
+        {/* ผู้ใช้งานและบทบาท — เว็บสาธิตไม่แสดงตารางนี้ */}
+        {ro ? (
+          <div className="card">
+            <h3>👥 ผู้ใช้งานและบทบาท</h3>
+            <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9 }}>
+              🔒 ส่วนนี้ปิดไว้เฉพาะบนเว็บสาธิต เพราะเป็นชื่อและอีเมลของเจ้าหน้าที่จริง
+              ซึ่งไม่ควรเปิดให้คนที่ไม่ได้ล็อกอินเห็น
+              <br />ในระบบจริง แอดมินเห็นรายชื่อผู้ใช้ทั้งหมด กำหนดบทบาทได้ 4 ระดับ
+              (รออนุมัติ · แอดมิน · ผู้ปฏิบัติงาน · ผู้บริหาร) และผู้สมัครใหม่จะเริ่มที่
+              &ldquo;รออนุมัติ&rdquo; เสมอจนกว่าแอดมินจะเปิดสิทธิ์ให้
+            </div>
+            <table className="tcards" style={{ marginTop: 12 }}>
+              <thead><tr><th>บทบาท</th><th>สิทธิ์ที่ได้</th></tr></thead>
+              <tbody>{Object.keys(ROLE_TH).map(r => (
+                <tr key={r}><td data-label="บทบาท">{ROLE_TH[r]}</td>
+                  <td className="cell-wrap" data-label="สิทธิ์ที่ได้" style={{ fontSize: 12.5 }}>{ROLE_RIGHT[r]}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="card">
+            <h3>👥 ผู้ใช้งานและบทบาท {pendingCount > 0 && <span style={{ fontSize: 12.5, color: '#b45309', background: '#fef3c7', padding: '2px 9px', borderRadius: 20, marginLeft: 6 }}>⏳ รออนุมัติ {pendingCount}</span>}</h3>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>ผู้ใช้ใหม่สมัครผ่านหน้า &ldquo;สมัครใช้งาน&rdquo; และเริ่มต้นเป็น &ldquo;รออนุมัติ&rdquo; เสมอ — เลือกบทบาทให้ที่นี่เพื่อเปิดสิทธิ์เข้าใช้งาน</div>
+            <table className="tcards">
+              <thead><tr><th>ผู้ใช้</th><th>อีเมล</th><th>หน่วยงาน</th><th>บทบาท</th><th>สิทธิ์</th></tr></thead>
+              <tbody>{users.slice().sort((a, b) => (a.role === 'pending' ? -1 : 0) - (b.role === 'pending' ? -1 : 0)).map(u => (
+                <tr key={u.id} style={u.role === 'pending' ? { background: '#fffbeb' } : undefined}>
+                  <td data-label="ผู้ใช้">{u.full_name || '-'}{u.id === me ? ' (คุณ)' : ''}</td>
+                  <td data-label="อีเมล">{u.email || '-'}</td>
+                  <td data-label="หน่วยงาน">{u.dept || '-'}</td>
+                  <td data-label="บทบาท">
+                    <select style={sel} value={u.role} onChange={e => changeRole(u.id, e.target.value)}>
+                      {Object.keys(ROLE_TH).map(r => <option key={r} value={r}>{ROLE_TH[r]}</option>)}
+                    </select>
+                  </td>
+                  <td className="cell-wrap" data-label="สิทธิ์" style={{ fontSize: 12 }}>{ROLE_RIGHT[u.role] || '-'}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
 
         {/* การเชื่อมต่อช่องทาง */}
         <div className="card">
@@ -204,18 +236,18 @@ export default function AdminPage() {
                   <td>{ch.name}<div style={{ fontSize: 12, color: 'var(--muted)' }}>channel_id: <code>{ch.id}</code></div></td>
                   <td>
                     <label style={{ cursor: 'pointer', fontSize: 12.5 }}>
-                      <input type="checkbox" checked={c.api_enabled} onChange={e => setC(ch.id, { api_enabled: e.target.checked })} /> เปิด
+                      <input type="checkbox" disabled={ro} checked={c.api_enabled} onChange={e => setC(ch.id, { api_enabled: e.target.checked })} /> เปิด
                     </label>
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <input style={{ ...sel, width: 210, fontFamily: 'monospace', fontSize: 11.5 }} value={c.webhook_secret}
-                        onChange={e => setC(ch.id, { webhook_secret: e.target.value })} placeholder="ยังไม่ตั้ง secret" />
-                      <button className="btn" style={{ padding: '6px 10px', fontSize: 12 }} type="button"
+                      <input style={{ ...sel, width: 210, fontFamily: 'monospace', fontSize: 11.5 }} value={c.webhook_secret} disabled={ro}
+                        onChange={e => setC(ch.id, { webhook_secret: e.target.value })} placeholder={ro ? 'ตั้งค่าในระบบจริง' : 'ยังไม่ตั้ง secret'} />
+                      <button className="btn" style={{ padding: '6px 10px', fontSize: 12 }} type="button" disabled={ro}
                         onClick={() => setC(ch.id, { webhook_secret: genSecret() })}>สุ่ม</button>
                     </div>
                   </td>
-                  <td><button className="btn" style={{ padding: '6px 12px', fontSize: 12 }} type="button" onClick={() => saveCfg(ch.id)}>บันทึก</button></td>
+                  <td><button className="btn" style={{ padding: '6px 12px', fontSize: 12 }} type="button" disabled={ro} onClick={() => saveCfg(ch.id)}>บันทึก</button></td>
                 </tr>
               );
             })}</tbody>
@@ -236,9 +268,10 @@ export default function AdminPage() {
             ตั้ง Secrets ที่ Supabase → Edge Functions → Secrets: <code>LLM_API_KEY</code> (จำเป็น) · <code>LLM_BASE_URL</code> · <code>LLM_MODEL</code>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button className="btn" type="button" onClick={testLLM} disabled={llmBusy}>
+            <button className="btn" type="button" onClick={testLLM} disabled={llmBusy || ro}>
               {llmBusy ? 'กำลังทดสอบ…' : '⚡ ทดสอบการเชื่อมต่อ LLM'}
             </button>
+            {ro && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>ปุ่มทดสอบเรียกคีย์ LLM ขององค์กร จึงปิดไว้บนเว็บสาธิต</span>}
             {llmPing && (llmPing.ok
               ? <span style={{ fontSize: 12.5, color: '#15803d' }}>
                   ✓ เชื่อมต่อได้ · โมเดล <b>{llmPing.model}</b> · ตอบใน {llmPing.latencyMs} ms

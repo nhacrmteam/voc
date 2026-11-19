@@ -9,7 +9,6 @@ import { JOURNEYS, projectTypeOf } from '../../lib/data';
 import { analyzeText, analyzeSmartBatch, applyScoreHint, SmartResult } from '../../lib/ai';
 import { maskPII, summarizePII, type PiiHit } from '../../lib/pii';
 import { IS_DEMO } from '../../lib/demo';
-import DemoBlocked from '../DemoBlocked';
 
 // ช่องทาง 8 ช่อง (id ตรงตาราง channel ใน Supabase)
 const CH = [
@@ -114,7 +113,10 @@ function currentFYRange(): { from: string; to: string; label: string } {
   };
   const q = mo >= 9 ? 'q1' : mo <= 2 ? 'q2' : mo <= 5 ? 'q3' : 'q4';
   const [from, to, qLabel] = Q[q];
-  const today = new Date().toISOString().slice(0, 10);
+  // วันที่ "วันนี้" ตามเวลาเครื่อง ไม่ใช่ UTC — ถ้าใช้ UTC ช่วงเวลาไทยตี 1 ถึง 7 โมงเช้า
+  // จะได้วันที่ของเมื่อวาน แล้วตัดช่วงไตรมาสสั้นไป 1 วัน
+  const n = new Date();
+  const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
   return { from, to: to > today ? today : to, label: 'ปีงบ ' + be + ' · ' + qLabel };   // ไม่ให้เกินวันนี้
 }
 
@@ -255,8 +257,6 @@ const cellInp: React.CSSProperties = { padding: '5px 7px', border: '1px solid va
 interface UploadLog { id: string; file_name: string | null; channel_id: string; total: number; ok_count: number; created_at: string; profiles?: { full_name: string | null } | { full_name: string | null }[] }
 
 export default function ImportPage() {
-  // เว็บสาธิต: ปิดหน้านี้ (ชั้นสำรองของ middleware)
-  if (IS_DEMO) return <DemoBlocked title="นำเข้าข้อมูล" />;
   const [role, setRole] = useState<string | null>(null);
   const [chId, setChId] = useState('web');
   const [source, setSource] = useState('Website');
@@ -333,6 +333,10 @@ export default function ImportPage() {
   }, []);
 
   useEffect(() => {
+    // เว็บสาธิต: เดินขั้นตอนนำเข้าได้ครบ (เลือกช่องทาง · อัปโหลดไฟล์ · ตรวจจับคอลัมน์ · ตรวจสอบก่อนบันทึก)
+    // แต่ปิดปุ่มบันทึกไว้ — ไฟล์ที่ลากมาถูกอ่านในเบราว์เซอร์เท่านั้น ไม่ถูกส่งเข้าฐานสาธิต
+    // และไม่โหลดประวัติการนำเข้า เพราะเป็นร่องรอยการทำงานของเจ้าหน้าที่จริง
+    if (IS_DEMO) { setRole('demo'); return; }
     if (!supabase) { setRole('mock'); return; }
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { setRole('none'); return; }
@@ -733,7 +737,8 @@ export default function ImportPage() {
   }
 
   // นำเข้าข้อมูลเป็นสิทธิ์ของแอดมินเท่านั้น (operator/executive เข้าไม่ได้)
-  const blocked = role !== 'admin' && role !== 'mock' && role !== 'none';
+  // 'demo' = เว็บสาธิต เห็นหน้าจอครบแต่กดบันทึกไม่ได้
+  const blocked = role !== 'admin' && role !== 'mock' && role !== 'none' && role !== 'demo';
   // ขั้นสูงสุดที่กดข้ามไปได้ (ยังไม่มีไฟล์ = ไปได้แค่ขั้น 2)
   const maxStep = !grid.length ? 2 : !rows.length ? 3 : 4;
 
@@ -745,6 +750,14 @@ export default function ImportPage() {
           <div className="imp-panel">🔒 เมนูนำเข้าข้อมูลสำหรับบทบาทแอดมินเท่านั้น</div>
         ) : (
         <>
+        {role === 'demo' && (
+          <div className="imp-alert warn" style={{ marginBottom: 14 }}>
+            👁️ <b>เว็บสาธิต</b> — เดินได้ครบทั้ง 4 ขั้นตอน ลากไฟล์ของคุณเองมาลองได้
+            เพื่อดูว่าระบบตรวจจับคอลัมน์และกลบข้อมูลส่วนบุคคลอย่างไร
+            ไฟล์ถูกอ่านในเบราว์เซอร์เท่านั้น ไม่ถูกส่งเข้าฐานข้อมูล ·
+            ปุ่มบันทึกในขั้นที่ 4 ปิดไว้ เพื่อให้ชุดข้อมูลสาธิตคงเดิมตรงกับที่อ้างอิงในเอกสาร
+          </div>
+        )}
         {/* เลือกรูปแบบการนำเข้า */}
         <div className="imp-ways">
           {([
@@ -1095,13 +1108,14 @@ export default function ImportPage() {
                 {useLLM && okSave.length ? ' (~' + Math.ceil(okSave.length / 10) + ' คำขอ)' : ''} · ถ้าใช้ไม่ได้จะสลับเป็น rule-based อัตโนมัติ</span></span>
             </label>
 
+            {role === 'demo' && <div className="imp-alert warn">👁️ เว็บสาธิต — ปุ่มบันทึกปิดไว้ ข้อมูลที่เห็นในตารางนี้อยู่ในเบราว์เซอร์ของคุณเท่านั้น</div>}
             {role === 'mock' && <div className="imp-alert info">โหมดข้อมูลจำลอง — ปุ่มบันทึกใช้ได้เมื่อเชื่อม Supabase แล้ว</div>}
             {role === 'none' && <div className="imp-alert info">กรุณาเข้าสู่ระบบก่อนนำเข้าข้อมูล</div>}
             {err && <div className="imp-alert bad">{err}</div>}
 
             <div className="imp-foot">
               <button type="button" className="imp-btn" onClick={() => setStep(3)}>← ย้อนกลับ</button>
-              <button type="button" className="imp-btn pri" onClick={save} disabled={busy || checking || !okSave.length || role === 'mock' || role === 'none'}>
+              <button type="button" className="imp-btn pri" onClick={save} disabled={busy || checking || !okSave.length || role === 'mock' || role === 'none' || role === 'demo'}>
                 {busy ? (prog || 'กำลังนำเข้า…') : '💾 บันทึก ' + okSave.length.toLocaleString() + ' รายการ'}
               </button>
             </div>

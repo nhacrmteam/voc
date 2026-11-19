@@ -11,23 +11,17 @@
 //    (โปรเจกต์นี้อัปเป็น Next 14.2.35 ซึ่งปิดช่องโหว่นั้นแล้ว แต่กติกา "อย่าพึ่งด่านเดียว" ยังใช้เหมือนเดิม)
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { IS_DEMO, isDemoBlocked } from './lib/demo';
+import { IS_DEMO } from './lib/demo';
 
 // หน้าที่เข้าได้โดยไม่ต้องล็อกอิน
 const PUBLIC = ['/login', '/welcome'];
 
 export async function middleware(req: NextRequest) {
   // ---------- เว็บสาธิต ----------
-  // เข้าดูได้ทุกหน้าโดยไม่ต้องล็อกอิน แต่ปิดหน้าที่เขียนข้อมูลได้ทั้งหมด
-  // (ด่านนี้เป็นชั้นสะดวก ไม่ใช่ชั้นความปลอดภัยหลัก — ชั้นจริงคือฐานสาธิตถูกล็อกเป็นอ่านอย่างเดียว
-  //  และฐานข้อมูลจริงไม่เคยเปิดสิทธิ์ให้ anon เลย)
+  // เข้าดูได้ทุกหน้าโดยไม่ต้องล็อกอิน และเห็นเมนูครบเหมือนระบบจริง
+  // หน้าที่เขียนข้อมูลได้ (นำเข้าข้อมูล · คิวรอยืนยัน · จัดการระบบ) เปิดดูได้แบบอ่านอย่างเดียว
+  // ไม่เด้งออกแล้ว เพราะด่านจริงคือฐานสาธิตถูกถอนสิทธิ์เขียนทั้งฐาน ไม่ใช่การกันที่ URL
   if (IS_DEMO) {
-    if (isDemoBlocked(req.nextUrl.pathname)) {
-      const to = req.nextUrl.clone();
-      to.pathname = '/dashboard';
-      to.search = '';
-      return NextResponse.redirect(to);
-    }
     // /login บนเว็บสาธิตไม่มีความหมาย — พาไปหน้าภาพรวมเลย
     if (req.nextUrl.pathname === '/login') {
       const to = req.nextUrl.clone();

@@ -15,7 +15,6 @@ import { supabase } from '../../lib/supabaseClient';
 import { CHANNELS } from '../../lib/data';
 import EmptyState from '../components/EmptyState';
 import { IS_DEMO } from '../../lib/demo';
-import DemoBlocked from '../DemoBlocked';
 
 type Sent = 'Positive' | 'Neutral' | 'Negative';
 interface Item {
@@ -36,8 +35,6 @@ const one = <T,>(x: T | T[] | null | undefined): T | undefined => (Array.isArray
 const sel: React.CSSProperties = { padding: '8px 11px', border: '1px solid var(--line)', borderRadius: 9, fontSize: 13, fontFamily: 'inherit', background: 'var(--card,#fff)', color: 'inherit' };
 
 export default function ReviewQueueView() {
-  // เว็บสาธิต: ปิดหน้านี้ (ชั้นสำรองของ middleware)
-  if (IS_DEMO) return <DemoBlocked title="คิวรอยืนยันเสียงลูกค้า" />;
   const [role, setRole] = useState<string | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [total, setTotal] = useState(0);
@@ -55,6 +52,8 @@ export default function ReviewQueueView() {
   const canEdit = role === 'admin' || role === 'operator';
 
   useEffect(() => {
+    // เว็บสาธิต: ไม่มีผู้ใช้ให้ถามบทบาท และต้องดูได้อย่างเดียว → canEdit = false
+    if (IS_DEMO) { setRole('demo'); return; }
     if (!supabase) { setRole('mock'); return; }
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { setRole('none'); return; }
@@ -189,8 +188,9 @@ export default function ReviewQueueView() {
 
         {err && <div className="rq-err">{err}</div>}
 
+        {role === 'demo' && <div className="imp-alert warn" style={{ marginBottom: 14 }}>👁️ เว็บสาธิต — ดูคิวงานจริงได้ แต่ปิดปุ่มยืนยันไว้ เพื่อให้ชุดข้อมูลคงเดิมตรงกับที่อ้างอิงในเอกสาร · ในระบบจริงเจ้าหน้าที่กดยืนยันได้ทีละรายการหรือเลือกหลายรายการพร้อมกัน</div>}
         {role === 'mock' && <div className="imp-alert warn" style={{ marginBottom: 14 }}>* โหมดสาธิต — ปุ่มยืนยันใช้ได้เมื่อเชื่อม Supabase</div>}
-        {role && role !== 'mock' && !canEdit && <div className="imp-alert warn" style={{ marginBottom: 14 }}>🔒 บทบาทของคุณดูได้อย่างเดียว — ต้องเป็นแอดมินหรือผู้ปฏิบัติงานจึงยืนยันได้</div>}
+        {role && role !== 'mock' && role !== 'demo' && !canEdit && <div className="imp-alert warn" style={{ marginBottom: 14 }}>🔒 บทบาทของคุณดูได้อย่างเดียว — ต้องเป็นแอดมินหรือผู้ปฏิบัติงานจึงยืนยันได้</div>}
 
         {/* แถบเครื่องมือ: เลือกหลายรายการ */}
         {canEdit && items.length > 0 && (
@@ -255,6 +255,11 @@ export default function ReviewQueueView() {
                     <button className="rq-btn pos" disabled={busy === it.id} onClick={() => confirmOne(it.id, 'Positive')}>เชิงบวก</button>
                     <button className="rq-btn neu" disabled={busy === it.id} onClick={() => confirmOne(it.id, 'Neutral')}>เป็นกลาง</button>
                     <button className="rq-btn neg" disabled={busy === it.id} onClick={() => confirmOne(it.id, 'Negative')}>เชิงลบ</button>
+                    <Link href={'/voc/' + it.id} className="rq-more">ดูรายละเอียด →</Link>
+                  </div>
+                )}
+                {!canEdit && (
+                  <div className="rq-acts">
                     <Link href={'/voc/' + it.id} className="rq-more">ดูรายละเอียด →</Link>
                   </div>
                 )}
