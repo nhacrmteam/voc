@@ -143,6 +143,24 @@ function page(sb: SupabaseClient, from: number, select: string) {
     .range(from, from + PAGE - 1);
 }
 
+/** ยิงหน้าหนึ่ง พร้อมลองซ้ำเมื่อล้ม
+ *
+ *  ทำไมต้องมี: ที่ 10,012 แถว โค้ดยิง 11 คำขอพร้อมกัน แต่ละคำขอเชื่อม 4 ตาราง
+ *  ถ้ามีคำขอใดคำขอหนึ่งล้ม (เครือข่ายสะดุด · ฐานตอบช้าช่วง deploy · ชนลิมิตชั่วคราว)
+ *  โค้ดเดิมจะคืนเท่าที่ได้มาแล้วเงียบ ๆ หน้าเว็บยังสวยทุกอย่าง แต่ตัวเลขสรุปต่ำกว่าความจริง
+ *  ซึ่งอันตรายกว่าเว็บล่ม เพราะไม่มีใครรู้ว่าตัวเลขที่อ่านอยู่ผิด
+ *
+ *  ลองซ้ำสูงสุด 3 ครั้ง เว้นระยะเพิ่มขึ้นทีละรอบ (0.3 → 0.9 วินาที) */
+async function pageWithRetry(sb: SupabaseClient, from: number, select: string, tries = 3) {
+  let last = await page(sb, from, select);
+  for (let i = 1; i < tries && last.error; i++) {
+    await new Promise(r => setTimeout(r, 300 * i));
+    console.warn(`ดึงแถวที่ ${from}–${from + PAGE - 1} ไม่สำเร็จ (${last.error.message}) — ลองใหม่ครั้งที่ ${i + 1}`);
+    last = await page(sb, from, select);
+  }
+  return last;
+}
+
 async function fetchAll(): Promise<Voc[]> {
   // ใช้ตัวเชื่อมที่ผูกกับ session ของผู้ใช้ — RLS ฝั่ง Postgres จึงเป็นด่านจริง ไม่ใช่แค่ด่านหน้าจอ
   const sb = getServerSupabase();
@@ -160,11 +178,17 @@ async function fetchAll(): Promise<Voc[]> {
 
   if (!cErr && count != null) {
     const pages = Math.min(Math.max(1, Math.ceil(count / PAGE)), MAX_PAGES);
-    const res = await Promise.all(Array.from({ length: pages }, (_, i) => page(sb, i * PAGE, sel)));
+    const res = await Promise.all(Array.from({ length: pages }, (_, i) => pageWithRetry(sb, i * PAGE, sel)));
     const out: Voc[] = [];
     for (const { data, error } of res) {
       if (error) { console.error('Supabase error:', error.message); return out.length ? out : MOCK; }
       out.push(...(data ?? []).map(mapRow));
+    }
+    // 🚨 ได้ไม่ครบ = ตัวเลขทุกตัวบนหน้าจอผิด โดยหน้าเว็บยังดูปกติทุกอย่าง
+    //    เคยเกิดจริงตอน deploy ใหม่ ๆ หน้าภาพรวมขึ้น 3,000 แทน 10,012 (หน้าที่ 4 ล้มเงียบ ๆ)
+    //    เขียน log ไว้ให้ตามย้อนได้ว่าหน้าที่เสิร์ฟไปตอนนั้นตัวเลขเชื่อไม่ได้
+    if (out.length !== count) {
+      console.error(`ดึงข้อมูลได้ไม่ครบ: ได้ ${out.length} จาก ${count} แถว — ตัวเลขสรุปบนหน้าจอจะต่ำกว่าความจริง`);
     }
     return out;
   }
@@ -173,7 +197,7 @@ async function fetchAll(): Promise<Voc[]> {
   console.error('Supabase count error:', cErr?.message);
   const out: Voc[] = [];
   for (let i = 0; i < MAX_PAGES; i++) {
-    const { data, error } = await page(sb, i * PAGE, sel);
+    const { data, error } = await pageWithRetry(sb, i * PAGE, sel);
     if (error) { console.error('Supabase error:', error.message); return out.length ? out : MOCK; }
     const batch = data ?? [];
     out.push(...batch.map(mapRow));
