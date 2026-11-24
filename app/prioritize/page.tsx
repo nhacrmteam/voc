@@ -21,7 +21,7 @@ export default async function Prioritize() {
           <h3>⚖️ น้ำหนักปัจจัย — ด้านเฝ้าระวัง (แอดมินปรับได้)</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 14, marginTop: 10 }}>
             {FACTORS.map(f => (
-              <div key={f.key}>
+              <div key={f.key} title={`${f.name} — น้ำหนัก ${Math.round(f.w * 100)}% · ${f.desc}`}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
                   <b>{f.name}</b><b style={{ color: '#1f3a93' }}>{Math.round(f.w * 100)}%</b>
                 </div>
@@ -65,7 +65,7 @@ export default async function Prioritize() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 14 }}>
             {STRENGTH_FACTORS.map(f => (
-              <div key={f.key}>
+              <div key={f.key} title={`${f.name} — น้ำหนัก ${Math.round(f.w * 100)}% · ${f.desc}`}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
                   <b>{f.name}</b><b style={{ color: '#15803d' }}>{Math.round(f.w * 100)}%</b>
                 </div>

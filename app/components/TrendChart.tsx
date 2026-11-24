@@ -19,6 +19,16 @@ export default function TrendChart({ points, color = '#1f3a93' }: { points: { la
             <title>{`${p.label}: ${p.value} รายการ`}</title>
           </circle>
         ))}
+        {/* สี่เหลี่ยมใสเต็มความสูง — จุดกลมกว้างแค่ 5px ชี้เมาส์แทบไม่โดน
+            วางไว้ชั้นบนสุดเพื่อรับการชี้แทน ตัวเลขที่แสดงเป็นชุดเดียวกับจุด */}
+        {points.map((p, i) => {
+          const bw = (w - padX * 2) / Math.max(1, points.length - 1);
+          return (
+            <rect key={'hit' + i} x={X(i) - bw / 2} y={0} width={bw} height={h} fill="transparent">
+              <title>{`${p.label}: ${p.value} รายการ`}</title>
+            </rect>
+          );
+        })}
       </svg>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>
         {points.filter((_, i) => i % step === 0).map(p => <span key={p.label}>{p.label}</span>)}

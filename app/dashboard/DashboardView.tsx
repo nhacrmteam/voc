@@ -214,23 +214,50 @@ function SentDonut({ pos, neu, neg }: { pos: number; neu: number; neg: number })
   );
 }
 
-function Spark({ arr, color }: { arr: number[]; color: string }) {
+const TH_MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+
+// เส้นกราฟจิ๋วในการ์ดเวลา
+// แต่ละช่วงมีสี่เหลี่ยมใสคลุมไว้เพื่อให้ชี้เมาส์แล้วขึ้นวันที่+จำนวนได้
+// (ถ้าไม่มีสี่เหลี่ยมใส จะเหลือแต่เส้นบาง ๆ ให้ชี้ ซึ่งแทบชี้ไม่โดน)
+function Spark({ arr, labels, color }: { arr: number[]; labels?: string[]; color: string }) {
   if (arr.length < 2) return null;
   const w = 120, h = 26, mx = Math.max(...arr), mn = Math.min(...arr);
   const pts = arr.map((v, i) => `${(i / (arr.length - 1) * w).toFixed(1)},${(h - 3 - (v - mn) / ((mx - mn) || 1) * (h - 6)).toFixed(1)}`).join(' ');
+  const bw = w / arr.length;
   return (
     <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block', marginTop: 6 }}>
       <polyline points={`0,${h} ${pts} ${w},${h}`} fill={color + '22'} stroke="none" />
       <polyline points={pts} fill="none" stroke={color} strokeWidth={2} />
+      {arr.map((v, i) => (
+        <rect key={i} x={i * bw} y={0} width={bw} height={h} fill="transparent">
+          <title>{`${labels?.[i] ?? `ช่วงที่ ${i + 1}`} · ${v.toLocaleString()} เสียง`}</title>
+        </rect>
+      ))}
     </svg>
   );
 }
+/** แบ่งช่วงวันที่ from…to ออกเป็น buckets ช่วง แล้วนับจำนวนเสียงในแต่ละช่วง
+ *  คืนป้ายกำกับวันที่มาด้วย เพื่อให้ชี้เมาส์ที่กราฟจิ๋วแล้วรู้ว่าเป็นช่วงไหน
+ *  ใช้ getUTC* เพราะ from/to เป็นสตริง YYYY-MM-DD ซึ่งถูกอ่านเป็นเที่ยงคืน UTC
+ *  (ถ้าใช้ getDate() ธรรมดา เครื่องเวลาไทยจะอ่านได้วันที่คลาดไป) */
 function dateSeries(rows: Voc[], from: string, to: string, buckets = 12) {
-  const f = new Date(from).getTime(), t = new Date(to).getTime();
-  const step = (t - f) / buckets;
-  const out = new Array(buckets).fill(0);
-  rows.forEach(r => { const d = new Date(r.occurredAt).getTime(); if (d >= f && d <= t) { const i = Math.min(buckets - 1, Math.max(0, Math.floor((d - f) / step))); out[i]++; } });
-  return out;
+  const DAY = 86400000;
+  const f = new Date(from).getTime();
+  // นับรวมทั้งวันของ to ด้วย (ไม่ใช่หยุดที่เที่ยงคืน) ช่วงจึงยาวเป็นจำนวนวันเต็ม
+  // และเมื่อหารด้วยจำนวนช่อง แต่ละช่องจะลงตัวเป็นวัน ป้ายกำกับจึงไม่คร่อมวัน
+  const span = new Date(to).getTime() + DAY - f;
+  const step = span / buckets;
+  const values = new Array(buckets).fill(0);
+  rows.forEach(r => {
+    const d = new Date(r.occurredAt).getTime();
+    if (d >= f && d < f + span) values[Math.min(buckets - 1, Math.floor((d - f) / step))]++;
+  });
+  const dmy = (ms: number) => { const d = new Date(ms); return `${d.getUTCDate()} ${TH_MON[d.getUTCMonth()]}`; };
+  const labels = Array.from({ length: buckets }, (_, i) => {
+    const a = dmy(f + i * step), b = dmy(f + (i + 1) * step - 1);
+    return a === b ? a : `${a} – ${b}`;
+  });
+  return { values, labels };
 }
 const sel: React.CSSProperties = { padding: '8px 11px', border: '1px solid var(--line)', borderRadius: 9, fontSize: 13, fontFamily: 'inherit', background: 'var(--card,#fff)', color: 'inherit' };
 
@@ -335,7 +362,9 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
       lab: 'ปีงบประมาณ ' + maxFY, sub: 'สะสมทั้งปีงบ', color: '#8b5cf6',
       n: inRange(`${maxFY - 543 - 1}-10-01`, `${maxFY - 543}-09-30`),
       prev: inRange(`${maxFY - 543 - 2}-10-01`, `${maxFY - 543 - 1}-09-30`), pl: 'เทียบปีก่อน',
-      spark: dateSeries(fBase, daysAgo(29), anchor, 15),
+      // กราฟจิ๋วต้องเป็นช่วงเดียวกับตัวเลขบนการ์ด — เดิมใช้ 30 วันล่าสุดเหมือนการ์ด "เดือนนี้"
+      // ทำให้เส้นใต้ตัวเลข "สะสมทั้งปีงบ" เป็นคนละช่วงกับตัวเลข ซึ่งอ่านแล้วเข้าใจผิดได้
+      spark: dateSeries(fBase, `${maxFY - 543 - 1}-10-01`, `${maxFY - 543}-09-30`, 12),
     },
   ];
 
@@ -350,7 +379,6 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
   const prevHigh = fPrev.filter(r => r.priority === 'High').length;
 
   // ---- แนวโน้มรายเดือน + sentiment (12 เดือนของปีงบที่เลือก / 12 เดือนล่าสุดถ้าเลือกทั้งหมด) ----
-  const TH_MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
   // คีย์เดือน "YYYY-MM" จากเวลาท้องถิ่น — ห้ามใช้ toISOString() ตรงนี้
   //
   // new Date(ปี, เดือน, 1) ได้เที่ยงคืนตาม "เวลาเครื่อง" แต่ toISOString() แปลงกลับเป็นเวลา UTC
@@ -394,6 +422,7 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
     name, n: f.filter(r => r.channel === name).length, color: CH_COLOR[i % CH_COLOR.length],
   }));
   const chanMax = Math.max(...chanRows.map(c => c.n), 1);
+  const chanTotal = chanRows.reduce((a, c) => a + c.n, 0);
 
   // เสียงลูกค้าตาม Customer Journey (ช่วงที่เลือก)
   const jrCount: Record<string, number> = {};
@@ -505,7 +534,7 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
               <div className="klab">{c.lab} <span style={{ opacity: .65 }}>· {c.sub}</span></div>
               <div className="kval">{c.n.toLocaleString()}</div>
               <Delta now={c.n} prev={c.prev} label={c.pl} />
-              <div className="kspark"><Spark arr={c.spark} color={c.color} /></div>
+              <div className="kspark"><Spark arr={c.spark.values} labels={c.spark.labels} color={c.color} /></div>
             </div>
           ))}
         </div>
@@ -555,7 +584,8 @@ export default function DashboardView({ rows }: { rows: Voc[] }) {
           <h3>📥 เสียงลูกค้าแยกตาม 8 ช่องทาง</h3>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -6, marginBottom: 12 }}>จำนวนรายการที่รับเข้าใน {pd.label}</div>
           {chanRows.map(c => (
-            <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '7px 0' }}>
+            <div key={c.name} title={`${c.name} — ${c.n.toLocaleString()} รายการ · ${chanTotal ? Math.round(c.n / chanTotal * 100) : 0}% ของทุกช่องทางใน${pd.label}`}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '7px 0' }}>
               <div style={{ width: 168, flexShrink: 0, fontSize: 12.5, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
               <div style={{ flex: 1, background: '#f1f5f9', borderRadius: 5, height: 20, position: 'relative' }}>
                 <div style={{ width: Math.round(c.n / chanMax * 100) + '%', height: '100%', background: c.color, borderRadius: 5, transition: 'width .3s' }} />

@@ -63,13 +63,17 @@ function Donut({ data, size = 150, thickness = 9 }: { data: { label: string; val
   let acc = 0;
   // r = 15.915 → เส้นรอบวง = 100 พอดี ทำให้ strokeDasharray ใช้ค่า % ได้ตรง ๆ
   return (
-    <svg viewBox="0 0 42 42" width={size} height={size} aria-hidden="true" style={{ display: 'block', overflow: 'visible' }}>
+    <svg viewBox="0 0 42 42" width={size} height={size} role="img"
+      aria-label={'สัดส่วนตามแหล่งที่มา — ' + data.map(d => `${d.label} ${d.value}`).join(' · ')}
+      style={{ display: 'block', overflow: 'visible' }}>
       <circle cx="21" cy="21" r="15.915" fill="none" stroke="var(--line)" strokeWidth={thickness} />
       {data.map((d, i) => {
         const seg = d.value / total * 100;
         const el = (
           <circle key={i} cx="21" cy="21" r="15.915" fill="none" stroke={d.color} strokeWidth={thickness}
-            strokeDasharray={`${seg} ${100 - seg}`} strokeDashoffset={25 - acc} strokeLinecap="butt" />
+            strokeDasharray={`${seg} ${100 - seg}`} strokeDashoffset={25 - acc} strokeLinecap="butt">
+            <title>{`${d.label}: ${d.value.toLocaleString()} รายการ (${Math.round(seg)}%)`}</title>
+          </circle>
         );
         acc += seg;
         return el;
@@ -259,6 +263,7 @@ function ChannelDetail({ rows, allRows, scores, name, period, onBack }: { rows: 
   const jr: Record<string, number> = {}; view.forEach(r => { if (r.journey) jr[r.journey] = (jr[r.journey] || 0) + 1; });
   const journey = Object.entries(jr).sort((a, b) => b[1] - a[1]);
   const jmax = Math.max(...journey.map(j => j[1]), 1);
+  const jtotal = journey.reduce((a, j) => a + j[1], 0);
   // จุดแข็ง — ประเด็นที่ได้เสียงเชิงบวกมากที่สุดในช่องทางนี้
   const st: Record<string, { c: number; pos: number }> = {};
   view.forEach(r => { if (!r.topic) return; st[r.topic] ||= { c: 0, pos: 0 }; st[r.topic].c++; if (r.sentiment === 'Positive') st[r.topic].pos++; });
@@ -334,7 +339,7 @@ function ChannelDetail({ rows, allRows, scores, name, period, onBack }: { rows: 
             <div className="card">
               <h3>การกระจายตามเส้นทางลูกค้า (Customer Journey)</h3>
               {journey.map(([k, v]) => (
-                <div key={k} style={{ margin: '9px 0' }}>
+                <div key={k} title={`${journeyLabel(k)} — ${v.toLocaleString()} รายการ · ${jtotal ? Math.round(v / jtotal * 100) : 0}% ของช่องทางนี้`} style={{ margin: '9px 0' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13, marginBottom: 3 }}><span>{journeyLabel(k)}</span><span style={{ fontWeight: 600, color: '#1f3a93' }}>{v}</span></div>
                   <div style={{ height: 8, background: '#eef2f7', borderRadius: 6 }}><div style={{ width: Math.round(v / jmax * 100) + '%', height: '100%', background: '#2e6cf0', borderRadius: 6 }} /></div>
                 </div>
@@ -348,7 +353,7 @@ function ChannelDetail({ rows, allRows, scores, name, period, onBack }: { rows: 
                   ยังไม่มีเสียงเชิงบวกในช่องทาง/แหล่งนี้ — เมื่อมีคำชมเข้ามา ประเด็นที่ลูกค้าพูดถึงบ่อยที่สุดจะขึ้นที่นี่พร้อมสัดส่วนเสียงบวก
                 </div>
               ) : strongTopics.map(([k, o]) => (
-                <div key={k} style={{ margin: '9px 0' }}>
+                <div key={k} title={`${k} — เสียงเชิงบวก ${o.pos} จากทั้งหมด ${o.c} รายการ (${Math.round(o.pos / o.c * 100)}%)`} style={{ margin: '9px 0' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13, marginBottom: 3 }}>
                     <span>{k}</span>
                     <span style={{ fontWeight: 600, color: '#15803d', whiteSpace: 'nowrap' }}>{o.pos} บวก <span style={{ color: 'var(--muted)', fontWeight: 400 }}>/ {o.c}</span></span>
@@ -363,7 +368,7 @@ function ChannelDetail({ rows, allRows, scores, name, period, onBack }: { rows: 
             <div className="card">
               <h3>หัวข้อที่พบบ่อย</h3>
               {topTopics.map(([k, v]) => (
-                <div key={k} style={{ margin: '9px 0' }}>
+                <div key={k} title={`${k} — พบ ${v.toLocaleString()} รายการในช่องทางนี้`} style={{ margin: '9px 0' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 3 }}><span>{k}</span><span style={{ fontWeight: 600 }}>{v}</span></div>
                   <div style={{ height: 8, background: '#eef2f7', borderRadius: 6 }}><div style={{ width: Math.round(v / tmax * 100) + '%', height: '100%', background: '#8b5cf6', borderRadius: 6 }} /></div>
                 </div>
