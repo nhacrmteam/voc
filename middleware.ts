@@ -3,7 +3,7 @@
 // ทำ 2 อย่าง
 //   1) ต่ออายุ access token ที่หมดอายุ แล้วเขียน cookie ใหม่กลับไป
 //      (server component เขียน cookie ไม่ได้ ถ้าไม่มีขั้นนี้ผู้ใช้จะถูกเด้งออกทุก ๆ ชั่วโมง)
-//   2) ยังไม่ล็อกอิน → เด้งไป /login ตั้งแต่ก่อนถึงหน้าเว็บ
+//   2) ยังไม่ล็อกอิน → เด้งไป /login ตั้งแต่ก่อนถึงหน้าเว็บ (ใช้กับเว็บสาธิตด้วย)
 //
 // ⚠️ ห้ามถือว่า middleware คือด่านเดียว
 //    Next.js เคยมีช่องโหว่ที่ข้าม middleware ได้ด้วย header ปลอม (CVE-2025-29927)
@@ -11,26 +11,15 @@
 //    (โปรเจกต์นี้อัปเป็น Next 14.2.35 ซึ่งปิดช่องโหว่นั้นแล้ว แต่กติกา "อย่าพึ่งด่านเดียว" ยังใช้เหมือนเดิม)
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { IS_DEMO } from './lib/demo';
 
 // หน้าที่เข้าได้โดยไม่ต้องล็อกอิน
 const PUBLIC = ['/login', '/welcome'];
 
 export async function middleware(req: NextRequest) {
   // ---------- เว็บสาธิต ----------
-  // เข้าดูได้ทุกหน้าโดยไม่ต้องล็อกอิน และเห็นเมนูครบเหมือนระบบจริง
-  // หน้าที่เขียนข้อมูลได้ (นำเข้าข้อมูล · คิวรอยืนยัน · จัดการระบบ) เปิดดูได้แบบอ่านอย่างเดียว
-  // ไม่เด้งออกแล้ว เพราะด่านจริงคือฐานสาธิตถูกถอนสิทธิ์เขียนทั้งฐาน ไม่ใช่การกันที่ URL
-  if (IS_DEMO) {
-    // /login บนเว็บสาธิตไม่มีความหมาย — พาไปหน้าภาพรวมเลย
-    if (req.nextUrl.pathname === '/login') {
-      const to = req.nextUrl.clone();
-      to.pathname = '/dashboard';
-      to.search = '';
-      return NextResponse.redirect(to);
-    }
-    return NextResponse.next();
-  }
+  // ตั้งแต่ 25 พ.ย. 2569 เว็บสาธิตใช้ด่านเดียวกับระบบจริงทุกประการ — ต้องเข้าสู่ระบบก่อน
+  // จึงไม่มีโค้ดพิเศษสำหรับโหมดสาธิตที่นี่อีกแล้ว ปล่อยให้ไหลไปตามเส้นทางปกติด้านล่าง
+  // ต่างกันแค่ "ข้อมูลที่อยู่ปลายทาง" (คนละฐาน) และหน้าเว็บเป็นแบบอ่านอย่างเดียว
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

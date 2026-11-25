@@ -153,7 +153,6 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
 
   // ทำให้ URL ตรงกับสถานะจริง: ยังไม่ล็อกอิน → /login, ล็อกอินแล้วแต่อยู่ /login → /dashboard
   useEffect(() => {
-    if (IS_DEMO) return;   // เว็บสาธิตไม่ต้องล็อกอิน ห้ามเด้งไป /login
     if (!ready || !supabase) return;
     if (!session && mode !== 'recovery' && !PUBLIC_PATHS.includes(pathname) && pathname !== '/login') {
       router.replace('/login');
@@ -165,9 +164,17 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   }, [ready, session, mode, pathname]);
 
   // ---------- เว็บสาธิต ----------
-  // ข้ามด่านล็อกอินทั้งหมด แสดงเนื้อหาได้เลย พร้อมแถบกำกับว่าเป็นข้อมูลจำลอง
-  // (ไม่ต้องรอ ready เพราะไม่มีการตรวจ session ให้รอ — เปิดมาเห็นหน้าเว็บทันที)
-  if (IS_DEMO) return <><DemoBanner />{children}</>;
+  // ตั้งแต่ 25 พ.ย. 2569 เว็บสาธิต "ต้องเข้าสู่ระบบ" เหมือนระบบจริง ไม่ข้ามด่านล็อกอินแล้ว
+  //
+  // ทำไมถึงเปลี่ยน: เอกสารที่รายงานผู้ประเมินระบุว่า "ต้องเข้าสู่ระบบจึงเข้าถึงข้อมูลได้"
+  // ถ้าเว็บสาธิตเปิดให้ดูโดยไม่ล็อกอิน ประโยคนั้นจะไม่จริงตามตัวอักษร
+  // และยังไปชนกับเรื่องช่องโหว่ที่ฝ่ายรายงานว่าปิดไปแล้ว (ผู้ไม่ล็อกอินเห็นเนื้อหาเสียงลูกค้า)
+  //
+  // ต่างกับระบบจริงตรงที่: ใช้ "บัญชีผู้ชม" ร่วมหนึ่งบัญชีที่แจกให้ผู้ประเมินได้
+  // และทุกหน้ายังเป็นแบบอ่านอย่างเดียว (ดูหมายเหตุ role === 'demo' ในแต่ละหน้า)
+  //
+  // ⚠️ ด่านจริงไม่ใช่โค้ดตรงนี้ แต่คือฐานสาธิตที่ถอนสิทธิ์อ่านของผู้ไม่ล็อกอินออกแล้ว
+  //    (แยกข้อมูลสาธิต/4_ล็อกฐานสาธิตให้อ่านอย่างเดียว.sql)
 
   if (!ready) return <div style={{ padding: 40, fontFamily: 'Sarabun,sans-serif' }}>กำลังโหลด…</div>;
 
@@ -236,10 +243,18 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
                 <label style={lab}>รหัสผ่าน</label>
                 <PwInput value={pw} onChange={e => setPw(e.target.value)} placeholder="••••••••" minLen={1} />
                 <button style={btn} type="submit" disabled={busy}>{busy ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ'}</button>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 15 }}>
-                  <button type="button" style={linkBtn} onClick={() => { setMode('forgot'); setErr(''); setMsg(''); }}>ลืมรหัสผ่าน?</button>
-                  <button type="button" style={linkBtn} onClick={() => { setMode('signup'); setErr(''); setMsg(''); }}>สมัครใช้งาน →</button>
-                </div>
+                {/* เว็บสาธิตไม่เปิดให้สมัครเอง — ใช้บัญชีผู้ชมที่ฝ่ายออกให้เท่านั้น */}
+                {IS_DEMO ? (
+                  <div style={{ marginTop: 16, background: '#fff7e6', border: '1px solid #f0c674', borderRadius: 9, padding: '11px 13px', fontSize: 12.5, color: '#7c4a03', lineHeight: 1.75 }}>
+                    <b>เว็บสาธิต — ข้อมูลจำลองเพื่อการสาธิต</b><br />
+                    เข้าใช้งานด้วย<b>บัญชีผู้ชม</b>ที่ฝ่ายการตลาดจัดให้ · เปิดดูได้ทุกหน้าแบบอ่านอย่างเดียว
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 15 }}>
+                    <button type="button" style={linkBtn} onClick={() => { setMode('forgot'); setErr(''); setMsg(''); }}>ลืมรหัสผ่าน?</button>
+                    <button type="button" style={linkBtn} onClick={() => { setMode('signup'); setErr(''); setMsg(''); }}>สมัครใช้งาน →</button>
+                  </div>
+                )}
 
                 {/* ปุ่มไปเว็บสาธิต — โผล่เฉพาะเมื่อตั้งค่า NEXT_PUBLIC_DEMO_URL ไว้
                     ไม่ตั้งค่า = หน้าล็อกอินของระบบจริงเหมือนเดิมทุกจุด (ยังไม่มีอะไรเปลี่ยน) */}
@@ -256,7 +271,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
                       👁️ ดูระบบตัวอย่าง (ข้อมูลจำลอง)
                     </a>
                     <div style={{ fontSize: 11.5, color: '#64748b', textAlign: 'center', marginTop: 7, lineHeight: 1.6 }}>
-                      เข้าดูได้โดยไม่ต้องล็อกอิน · เป็นข้อมูลจำลองเพื่อการสาธิต
+                      ใช้บัญชีผู้ชมที่ได้รับ · เป็นข้อมูลจำลองเพื่อการสาธิต
                     </div>
                   </div>
                 )}
@@ -375,6 +390,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
           <button onClick={signOut} style={{ fontSize: 12, border: '1px solid #e2e8f0', background: '#fff', borderRadius: 20, padding: '5px 11px', cursor: 'pointer', fontFamily: 'inherit' }}>ออกจากระบบ</button>
         </div>
       )}
+      {IS_DEMO && <DemoBanner />}
       {children}
     </>
   );
